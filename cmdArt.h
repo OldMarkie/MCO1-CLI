@@ -5,7 +5,7 @@
 class cmdArt {
 public:
     static void showArt() {
-        std::cout << R"(
+        std::cout << "\033[1;31m" << R"(
 	
     ___                     (_)                    _        _               ___     ___     ___      ___    ___     ___   __   __ 
    | _ \    _ _    ___      | |    ___     __     | |_     (_)      o O O  / __|   / __|   / _ \    | _ \  / __|   | __|  \ \ / / 
@@ -13,19 +13,22 @@ public:
   _|_|_   _|_|_   \___/   |__/_   \___|   \__|_   _\__|   _(_)_   TS__[O]  \___|   |___/   \___/   _|_|_   |___/   |___|   _|_|_  
 _| """ |_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| {======|_|"""""|_|"""""|_|"""""|_| """ |_|"""""|_|"""""|_| """ | 
 "`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-' 
-)";
+)" << "\033[0m";
     }
 
     static void showMenu() {
-        std::cout << "=== Main Menu ===\n";
-        std::cout << "1. initialize \n";
-        std::cout << "2. screen\n";
-        std::cout << "3. scheduler-test \n";
-        std::cout << "4. scheduler-stop\n";
-        std::cout << "5. report-util \n";
-        std::cout << "6. clear\n";
-        std::cout << "0. exit\n";
-        std::cout << "=================\n";
+        std::cout << "\033[32mWelcome, User!\033[0m\n\n";
+        std::cout << "\033[1;33m"
+            << "=== Main Menu ===\n"
+            << " -initialize\n"
+            << " -screen\n"
+            << " -scheduler-test\n"
+            << " -scheduler-stop\n"
+            << " -report-util\n"
+            << " -clear\n"
+            << " -exit\n"
+            << "=================\n"
+            << "\033[0m";
     }
 };
 
