@@ -4,6 +4,8 @@
 
 using namespace std;
 
+std::map<std::string, menuFunc::ScreenSession> menuFunc::sessions;
+
 int main() {
 
 	menuFunc::mainMenu();
