@@ -1,23 +1,19 @@
 #pragma once
 #include <iostream>
 #include <string>
-#include "cmdArt.h"
 #include <map>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
 #include <sstream> 
 
+#include "ScreenSession.h"
+#include "cmdArt.h"
+
+
 class menuFunc
 {
 public:
-
-	struct ScreenSession {
-		std::string processName;
-		int currentLine;
-		int totalLines;
-		std::string timestamp;
-	};
 
 	static std::map<std::string, ScreenSession> sessions;
 
@@ -30,7 +26,6 @@ public:
 
 		while (isRunning) {
 			cmdArt::showMenu();
-			std::cout << "Enter Command: ";
 			std::cin >> uChoice;
 
 			if (uChoice == "initialize"){
@@ -45,11 +40,11 @@ public:
 					auto now = std::chrono::system_clock::now();
 					std::time_t timeNow = std::chrono::system_clock::to_time_t(now);
 					std::tm localTime;
-					#ifdef _WIN32
+#ifdef _WIN32
 					localtime_s(&localTime, &timeNow);
-					#else
+#else
 					localtime_r(&timeNow, &localTime);
-					#endif
+#endif
 					std::ostringstream timeStream;
 					timeStream << std::put_time(&localTime, "%m/%d/%Y, %I:%M:%S %p");
 
@@ -61,60 +56,29 @@ public:
 					};
 
 					sessions[screenName] = newSession;
-					std::cout << "Screen session '" << screenName << "' started.\n";
-
-					// Immediately enter screen
-					bool inScreen = true;
-					while (inScreen) {
-						system("cls");  // Use "clear" on Linux/macOS
-						ScreenSession& s = sessions[screenName];
-						std::cout << "\n==== Screen Console Placeholder ====\n";
-						std::cout << "Process Name      : " << s.processName << "\n";
-						std::cout << "Instruction Line  : " << s.currentLine << " / " << s.totalLines << "\n";
-						std::cout << "Created At        : " << s.timestamp << "\n";
-						std::cout << "====================================\n";
-
-						std::cout << "\nType 'exit' to return to main menu.\n> ";
-						std::string screenInput;
-						std::cin >> screenInput;
-
-						if (screenInput == "exit") {
-							inScreen = false;
-							system("cls");
-							cmdArt::showArt();
-						}
-						else {
-							std::cout << "Unknown command in screen context. Type 'exit' to return.\n";
-						}
-					}
+					cmdArt::displayNewSesh(screenName);
 				}
 
 				else if (screenCmd == "-r") {
 					auto it = sessions.find(screenName);
 					if (it != sessions.end()) {
 						bool inScreen = true;
+						cmdArt::visualClear();  // Use "clear" on Unix
+						const ScreenSession& s = it->second;
+						cmdArt::screenMenu(screenName, s);
 						while (inScreen) {
-							// Clear and redraw screen placeholder
-							system("cls");  // Use "clear" on Unix
-							const ScreenSession& s = it->second;
-							std::cout << "\n==== Screen Console Placeholder ====\n";
-							std::cout << "Process Name      : " << s.processName << "\n";
-							std::cout << "Instruction Line  : " << s.currentLine << " / " << s.totalLines << "\n";
-							std::cout << "Created At        : " << s.timestamp << "\n";
-							std::cout << "====================================\n";
-
-							std::cout << "\nType 'exit' to return to main menu.\n> ";
 							std::string screenInput;
 							std::cin >> screenInput;
 
 							if (screenInput == "exit") {
 								inScreen = false;
-								system("cls");
+								cmdArt::visualClear();
 								cmdArt::showArt();
 							}
 							else {
-								// You can expand this to simulate line advancement, etc.
-								std::cout << "Unknown command in screen context. Type 'exit' to return.\n";
+								cmdArt::visualClear();
+								std::cout << "\033[1;31mUnknown command in screen context. Type 'exit' to return.\033[0m\n";
+								cmdArt::screenMenu(screenName, s);
 							}
 						}
 					}
@@ -136,7 +100,7 @@ public:
 				std::cout << "report-util command recognized.Doing something.\n\n";
 			}
 			else if (uChoice == "clear"){
-				system("cls");
+				cmdArt::visualClear();
 				cmdArt::showArt();
 			}
 			else if (uChoice == "exit"){

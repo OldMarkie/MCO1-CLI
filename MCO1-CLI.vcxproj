@@ -131,7 +131,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cmdArt.h" />
-    <ClInclude Include="menuFunc.h" />
+    <ClInclude Include="menuFunc.cpp" />
+    <ClInclude Include="ScreenSession.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

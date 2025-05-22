@@ -1,6 +1,9 @@
+//All of the Front-End Components
+
 #pragma once
 
-# include <iostream>
+#include <iostream>
+#include "ScreenSession.h"
 
 class cmdArt {
 public:
@@ -29,6 +32,26 @@ _| """ |_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| {======|_|"""""
             << " -exit\n"
             << "=================\n"
             << "\033[0m";
+        std::cout << "Enter Command: ";
+    }
+
+    static void visualClear() {
+        system("cls");
+    }
+
+    static void screenMenu(const std::string& screenName, const ScreenSession& s) {
+        std::cout << "\n==== Screen Console Placeholder ====\n";
+        std::cout << "Process Name      : " << s.processName << "\n";
+        std::cout << "Instruction Line  : " << s.currentLine << " / " << s.totalLines << "\n";
+        std::cout << "Created At        : " << s.timestamp << "\n";
+        std::cout << "====================================\n";
+
+        std::cout << "\nType 'exit' to return to main menu.\n> ";
+        
+    }
+
+    static void displayNewSesh(const std::string& screenName) {
+        std::cout << "Screen session '" << screenName << "' started.\n\n";
     }
 };
 

@@ -1,10 +1,10 @@
 #include <iostream>  
 #include <string>  
-#include "menuFunc.h"
+#include "menuFunc.cpp"
 
 using namespace std;
 
-std::map<std::string, menuFunc::ScreenSession> menuFunc::sessions;
+std::map<std::string, ScreenSession> menuFunc::sessions;
 
 int main() {
 
