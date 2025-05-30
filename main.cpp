@@ -1,14 +1,6 @@
-#include <iostream>  
-#include <string>  
-#include "menuFunc.cpp"
-
-using namespace std;
-
-std::map<std::string, ScreenSession> menuFunc::sessions;
+#include "Console.h"
 
 int main() {
-
-	menuFunc::mainMenu();
-
-	return 0;
+    Console::drawMainMenu();
+    return 0;
 }
