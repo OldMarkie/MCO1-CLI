@@ -1,4 +1,4 @@
-//All of the Front-End Components
+﻿//All of the Front-End Components
 
 #pragma once
 
@@ -22,15 +22,15 @@ _| """ |_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| {======|_|"""""
 
     static void showMenu() {
         std::cout << "\033[1;33m"
-            << "=== Main Menu ===\n"
-            << " -initialize\n"
-            << " -screen\n"
-            << " -scheduler-test\n"
-            << " -scheduler-stop\n"
-            << " -report-util\n"
-            << " -clear\n"
-            << " -exit\n"
-            << "=================\n"
+            << "==== Main Menu ====\n"
+            << "| -initialize     |\n"
+            << "| -screen         |\n"
+            << "| -scheduler-test |\n"
+            << "| -scheduler-stop |\n"
+            << "| -report-util    |\n"
+            << "| -clear          |\n"
+            << "| -exit           |\n"
+            << "===================\n"
             << "\033[0m";
         std::cout << "Enter Command: ";
     }
