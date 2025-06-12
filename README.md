@@ -14,3 +14,6 @@
 3. In Visual Studio, navigate to the top menu and click:  
    **`Debug` > `Start Without Debugging`**  
    (or press `Ctrl + F5`) to build and run the application.
+
+###Entry Class File:
+- `main.cpp`  
