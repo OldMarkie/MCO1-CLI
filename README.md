@@ -15,5 +15,5 @@
    **`Debug` > `Start Without Debugging`**  
    (or press `Ctrl + F5`) to build and run the application.
 
-###Entry Class File:
+##Entry Class File:
 - `main.cpp`  
