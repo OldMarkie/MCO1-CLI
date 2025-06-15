@@ -6,8 +6,8 @@
 
 class Console {
 public:
-    static void drawMainMenu(); // now includes menuFunc logic
-    static void drawScreenSession(const std::string& screenName); // now includes ScreenSessionManager logic
+    static void drawMainMenu();
+    static void drawScreenSession(const std::string& screenName);
     static void showUnknownCommand();
     static void clear();
     static void showArt();

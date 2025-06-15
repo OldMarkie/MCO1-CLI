@@ -5,8 +5,12 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
+#include "Scheduler.h"
 
 std::unordered_map<std::string, ScreenSession> sessions;
+extern bool isInitialized;
+extern Scheduler scheduler;
 
 void Console::drawMainMenu() {
     std::string uChoice;
@@ -17,38 +21,60 @@ void Console::drawMainMenu() {
         cmdArt::showMenu();
         std::cin >> uChoice;
 
+        if (!isInitialized && uChoice != "initialize" && uChoice != "exit") {
+            std::cout << "System not initialized. Use 'initialize' first.\n\n";
+            continue;
+        }
+
         if (uChoice == "initialize") {
-            std::cout << "initialize command recognized. Doing something. \n\n";
+            std::cout << "Initialization complete.\n\n";
+            isInitialized = true;
         }
         else if (uChoice == "screen") {
             std::string screenCmd, screenName;
-            std::cin >> screenCmd >> screenName;
+            std::cin >> screenCmd;
 
             if (screenCmd == "-s") {
+                std::cin >> screenName;
                 sessions[screenName] = createNewScreenSession(screenName);
                 cmdArt::displayNewSesh(screenName);
                 Console::drawScreenSession(screenName);
             }
             else if (screenCmd == "-r") {
+                std::cin >> screenName;
                 if (sessions.find(screenName) != sessions.end()) {
                     Console::drawScreenSession(screenName);
                 }
                 else {
-                    std::cout << "No session named '" << screenName << "' found.\n\n";
+                    std::cout << "Process " << screenName << " not found.\n\n";
                 }
             }
-            else {
-                std::cout << "Invalid screen command. Use 'screen -s <name>' or 'screen -r <name>'.\n\n";
+            else if (screenCmd == "-ls") {
+                auto running = scheduler.getRunningProcesses();
+                auto finished = scheduler.getFinishedProcesses();
+                std::cout << "=== SCREEN -LS ===\n";
+                std::cout << "Running Processes: " << running.size() << "\n";
+                for (auto* p : running) std::cout << "- " << p->name << "\n";
+                std::cout << "Finished Processes: " << finished.size() << "\n";
+                for (auto* p : finished) std::cout << "- " << p->name << "\n";
+                std::cout << "==================\n\n";
             }
+            else {
+                std::cout << "Invalid screen command. Use '-s <name>', '-r <name>', or '-ls'.\n\n";
+            }
+
         }
-        else if (uChoice == "scheduler-test") {
-            std::cout << "scheduler-test command recognized. Doing something. \n\n";
+        else if (uChoice == "scheduler-start") {
+            scheduler.start();
+            std::cout << "Scheduler started.\n\n";
         }
         else if (uChoice == "scheduler-stop") {
-            std::cout << "scheduler-stop command recognized. Doing something. \n\n";
+            scheduler.stop();
+            std::cout << "Scheduler stopped.\n\n";
         }
         else if (uChoice == "report-util") {
-            std::cout << "report-util command recognized. Doing something.\n\n";
+            scheduler.reportUtilization(true);
+            std::cout << "CPU utilization saved to csopesy-log.txt\n\n";
         }
         else if (uChoice == "clear") {
             Console::clear();
@@ -64,6 +90,7 @@ void Console::drawMainMenu() {
 }
 
 void Console::drawScreenSession(const std::string& screenName) {
+    cmdArt::visualClear();
     auto it = sessions.find(screenName);
     if (it == sessions.end()) {
         std::cerr << "Screen not found.\n";
@@ -72,7 +99,6 @@ void Console::drawScreenSession(const std::string& screenName) {
 
     bool inScreen = true;
     const ScreenSession& session = it->second;
-
     cmdArt::screenMenu(screenName, session);
 
     while (inScreen) {
@@ -83,6 +109,24 @@ void Console::drawScreenSession(const std::string& screenName) {
             inScreen = false;
             Console::clear();
             Console::showArt();
+        }
+        else if (screenInput == "process-smi") {
+            auto running = scheduler.getRunningProcesses();
+            auto finished = scheduler.getFinishedProcesses();
+            ProcessControlBlock* target = nullptr;
+            for (auto* p : running) if (p->name == screenName) target = p;
+            for (auto* p : finished) if (p->name == screenName) target = p;
+
+            if (target) {
+                std::cout << "\n--- Process Info ---\n";
+                std::cout << "Process: " << target->name << (target->isFinished ? " [Finished]" : " [Running]") << "\n";
+                std::cout << target->getLog() << "\n";
+            }
+            else {
+                std::cout << "Process " << screenName << " not found.\n";
+            }
+
+            std::cout << "> ";
         }
         else {
             Console::clear();
@@ -103,3 +147,4 @@ void Console::clear() {
 void Console::showArt() {
     cmdArt::showArt();
 }
+
