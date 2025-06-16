@@ -21,6 +21,22 @@ void Scheduler::start() {
         name << "p" << std::setw(3) << std::setfill('0') << i;
         pcb.name = name.str();
 
+
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+#ifdef _WIN32
+        std::tm timeinfo;
+        localtime_s(&timeinfo, &now_c);
+#else
+        std::tm timeinfo;
+        localtime_r(&now_c, &timeinfo);
+#endif
+        std::ostringstream oss;
+        oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
+        pcb.startTime = oss.str(); //  assign here
+
+
+
         for (int j = 0; j < 100; ++j) {
             Instruction instr;
             instr.type = InstructionType::PRINT;

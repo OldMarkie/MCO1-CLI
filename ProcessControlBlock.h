@@ -43,6 +43,14 @@ public:
     void addInstruction(const Instruction& instr);
     void execute(const Instruction& ins, int coreId);
 
+    std::string getStartTime() const;
+    int totalInstructions() const;
+    int lastExecutedCore = -1; // updated during execution
+
+    std::string startTime;
+
+
+
 private:
     std::vector<Instruction> instructions;
     std::unordered_map<std::string, uint16_t> variables;

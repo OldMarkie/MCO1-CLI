@@ -16,6 +16,7 @@ void ProcessControlBlock::generateInstructions(int count) {
         InstructionType::SLEEP
     };
 
+
     for (int i = 0; i < count; ++i) {
         Instruction instr;
         instr.type = types[rand() % types.size()];
@@ -51,10 +52,12 @@ void ProcessControlBlock::executeNextInstruction(int coreId) {
         return;
     }
 
+    lastExecutedCore = coreId; // <- record core
     Instruction& current = instructions[instructionPointer];
     execute(current, coreId);
     ++instructionPointer;
 }
+
 
 void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
     if (isFinished) return;
@@ -84,7 +87,15 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
         logs << "[LOG] " << message << "\n";
 
 #ifndef DISABLE_PRINT_LOG
-        std::ofstream outFile(name + ".txt", std::ios::app);
+        std::string filename = name + ".txt";
+        std::ifstream checkFile(filename);
+        bool isNew = checkFile.peek() == std::ifstream::traits_type::eof(); // check if empty
+        checkFile.close();
+
+        std::ofstream outFile(filename, std::ios::app);
+        if (isNew) {
+            outFile << "Process name: " << name << "\n\nLogs:\n\n";
+        }
         auto now = std::chrono::system_clock::now();
         auto now_c = std::chrono::system_clock::to_time_t(now);
 #ifdef _WIN32
@@ -112,3 +123,12 @@ std::string ProcessControlBlock::getLog() const {
 void ProcessControlBlock::addInstruction(const Instruction& instr) {
     instructions.push_back(instr);
 }
+
+std::string ProcessControlBlock::getStartTime() const {
+    return startTime;
+}
+
+int ProcessControlBlock::totalInstructions() const {
+    return static_cast<int>(instructions.size());
+}
+

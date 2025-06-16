@@ -52,12 +52,21 @@ void Console::drawMainMenu() {
             else if (screenCmd == "-ls") {
                 auto running = scheduler.getRunningProcesses();
                 auto finished = scheduler.getFinishedProcesses();
-                std::cout << "=== SCREEN -LS ===\n";
-                std::cout << "Running Processes: " << running.size() << "\n";
-                for (auto* p : running) std::cout << "- " << p->name << "\n";
-                std::cout << "Finished Processes: " << finished.size() << "\n";
-                for (auto* p : finished) std::cout << "- " << p->name << "\n";
-                std::cout << "==================\n\n";
+
+                std::cout << "\nRunning processes:\n";
+                for (auto* p : running) {
+                    std::cout << p->name << " (" << p->getStartTime() << ")  "
+                        << "Core: " << p->lastExecutedCore << " "
+                        << p->instructionPointer << "/" << p->totalInstructions() << "\n";
+                }
+
+                std::cout << "\nFinished processes:\n";
+                for (auto* p : finished) {
+                    std::cout << p->name << " (" << p->getStartTime() << ") "
+                        << "Finished " << p->instructionPointer << "/" << p->totalInstructions() << "\n";
+                }
+
+                std::cout << std::endl;
             }
             else {
                 std::cout << "Invalid screen command. Use '-s <name>', '-r <name>', or '-ls'.\n\n";
