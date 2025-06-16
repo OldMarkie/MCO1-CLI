@@ -20,11 +20,16 @@ void Console::drawMainMenu() {
         std::cin >> uChoice;
 
         if (uChoice == "initialize") {
-            isInitialized = true;
-            Console::clear();
-            Console::showArt();
-            cmdArt::showMenu();
-            std::cout << "System initialized. You may now access other commands.\n\n";
+            if (isInitialized) {
+                std::cout << "\033[1;33mSystem is already initialized.\n\n";
+            }
+            else {
+                isInitialized = true;
+                Console::clear();
+                Console::showArt();
+                cmdArt::showMenu();
+                std::cout << "System initialized. You may now access other commands.\n\n";
+            }
         }
         else if (uChoice == "clear") {
             Console::clear();
