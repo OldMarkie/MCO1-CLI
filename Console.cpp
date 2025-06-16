@@ -16,9 +16,10 @@ void Console::drawMainMenu() {
     std::string uChoice;
     bool isRunning = true;
     Console::showArt();
+    cmdArt::showMenu();
 
     while (isRunning) {
-        cmdArt::showMenu();
+        std::cout << "Enter command: ";
         std::cin >> uChoice;
 
         if (!isInitialized && uChoice != "initialize" && uChoice != "exit") {
@@ -88,6 +89,7 @@ void Console::drawMainMenu() {
         else if (uChoice == "clear") {
             Console::clear();
             Console::showArt();
+            cmdArt::showMenu();
         }
         else if (uChoice == "exit") {
             isRunning = false;
@@ -146,7 +148,7 @@ void Console::drawScreenSession(const std::string& screenName) {
 }
 
 void Console::showUnknownCommand() {
-    std::cout << "\033[1;31mUnknown command.\033[0m\n";
+    std::cout << "\033[1;31mUnknown command.\033[0m\n\n";
 }
 
 void Console::clear() {
