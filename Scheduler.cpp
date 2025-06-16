@@ -13,22 +13,35 @@ void Scheduler::initialize(const Config& cfg) {
 
 void Scheduler::start() {
     running = true;
+
+    // Fixed 10-process test case
+    for (int i = 0; i < 10; ++i) {
+        ProcessControlBlock pcb;
+        std::ostringstream name;
+        name << "p" << std::setw(3) << std::setfill('0') << i;
+        pcb.name = name.str();
+
+        for (int j = 0; j < 100; ++j) {
+            Instruction instr;
+            instr.type = InstructionType::PRINT;
+            instr.args = { "Hello world from " + pcb.name };
+            pcb.addInstruction(instr);
+        }
+
+        std::lock_guard<std::mutex> lock(schedulerMutex);
+
+        // FIX: insert first, then use pointer safely
+        auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+        readyQueue.push(&(it->second)); // correct and safe pointer
+    }
+
     for (int i = 0; i < config.numCPU; ++i) {
         cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
     }
 
-    // Generate dummy processes in a separate thread
-    std::thread([this]() {
-        int id = 0;
-        while (running) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(config.batchFreq * 50));
-            auto p = createRandomProcess(id++);
-            std::lock_guard<std::mutex> lock(schedulerMutex);
-            allProcesses.emplace(p.name, std::move(p));
-            readyQueue.push(&allProcesses[p.name]);
-        }
-        }).detach();
+    // Removed batch spawn thread
 }
+
 
 void Scheduler::stop() {
     running = false;
@@ -50,13 +63,12 @@ void Scheduler::cpuLoop(int coreId) {
         }
 
         if (process) {
-            process->executeNextInstruction();
+            process->executeNextInstruction(coreId);
+            std::lock_guard<std::mutex> lock(schedulerMutex);
             if (process->isFinished) {
-                std::lock_guard<std::mutex> lock(schedulerMutex);
                 finishedProcesses.push_back(process);
             }
             else {
-                std::lock_guard<std::mutex> lock(schedulerMutex);
                 readyQueue.push(process);
             }
         }
@@ -65,6 +77,7 @@ void Scheduler::cpuLoop(int coreId) {
         ++cpuTick;
     }
 }
+
 
 ProcessControlBlock Scheduler::createRandomProcess(int id) {
     ProcessControlBlock pcb;

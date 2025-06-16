@@ -27,7 +27,6 @@ class ProcessControlBlock {
 public:
     ProcessControlBlock() = default;
 
-    // Rule of 5: deleted copy, defaulted move
     ProcessControlBlock(const ProcessControlBlock&) = delete;
     ProcessControlBlock& operator=(const ProcessControlBlock&) = delete;
     ProcessControlBlock(ProcessControlBlock&&) = default;
@@ -38,13 +37,17 @@ public:
     bool isFinished = false;
 
     void generateInstructions(int count);
-    void executeNextInstruction();
+    void executeNextInstruction(int coreID);
     std::string getLog() const;
+
+    void addInstruction(const Instruction& instr);
+    void execute(const Instruction& ins, int coreId);
 
 private:
     std::vector<Instruction> instructions;
     std::unordered_map<std::string, uint16_t> variables;
     std::ostringstream logs;
 
-    void execute(const Instruction& ins);
+   
+
 };

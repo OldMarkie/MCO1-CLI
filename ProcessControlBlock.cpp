@@ -4,6 +4,8 @@
 #include <thread>
 #include <chrono>
 #include <algorithm>
+#include <fstream> // Add at top
+#include <iomanip> // Add for time formatting
 
 void ProcessControlBlock::generateInstructions(int count) {
     static const std::vector<InstructionType> types = {
@@ -42,7 +44,7 @@ void ProcessControlBlock::generateInstructions(int count) {
     }
 }
 
-void ProcessControlBlock::executeNextInstruction() {
+void ProcessControlBlock::executeNextInstruction(int coreId) {
     if (instructionPointer >= instructions.size()) {
         isFinished = true;
         logs << "\n[Finished] Process " << name << " completed.\n";
@@ -50,11 +52,11 @@ void ProcessControlBlock::executeNextInstruction() {
     }
 
     Instruction& current = instructions[instructionPointer];
-    execute(current);
+    execute(current, coreId);
     ++instructionPointer;
 }
 
-void ProcessControlBlock::execute(const Instruction& ins) {
+void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
     if (isFinished) return;
 
     if (ins.type == InstructionType::DECLARE) {
@@ -78,7 +80,24 @@ void ProcessControlBlock::execute(const Instruction& ins) {
             variables[dest] = (left > right) ? (left - right) : 0;
     }
     else if (ins.type == InstructionType::PRINT) {
-        logs << "[LOG] " << ins.args[0] << "\n";
+        std::string message = ins.args[0];
+        logs << "[LOG] " << message << "\n";
+
+#ifndef DISABLE_PRINT_LOG
+        std::ofstream outFile(name + ".txt", std::ios::app);
+        auto now = std::chrono::system_clock::now();
+        auto now_c = std::chrono::system_clock::to_time_t(now);
+#ifdef _WIN32
+        std::tm timeinfo;
+        localtime_s(&timeinfo, &now_c);
+#else
+        std::tm timeinfo;
+        localtime_r(&now_c, &timeinfo);
+#endif
+        outFile << "[" << std::put_time(&timeinfo, "%H:%M:%S") << "] ";
+        outFile << "[Core " << coreId << "] ";
+        outFile << message << "\n";
+#endif
     }
     else if (ins.type == InstructionType::SLEEP) {
         int ticks = std::stoi(ins.args[0]);
@@ -88,4 +107,8 @@ void ProcessControlBlock::execute(const Instruction& ins) {
 
 std::string ProcessControlBlock::getLog() const {
     return logs.str();
+}
+
+void ProcessControlBlock::addInstruction(const Instruction& instr) {
+    instructions.push_back(instr);
 }
