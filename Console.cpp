@@ -11,6 +11,7 @@
 std::unordered_map<std::string, ScreenSession> sessions;
 extern bool isInitialized;
 extern Scheduler scheduler;
+extern Config globalConfig;
 
 void Console::drawMainMenu() {
     std::string uChoice;
@@ -53,6 +54,11 @@ void Console::drawMainMenu() {
             else if (screenCmd == "-ls") {
                 auto running = scheduler.getRunningProcesses();
                 auto finished = scheduler.getFinishedProcesses();
+
+                std::cout << "\n=== CPU UTILIZATION ===\n";
+                std::cout << "CPU Cores        : " << globalConfig.numCPU << "\n";
+                std::cout << "Cores In Use     : " << running.size() << "\n";
+                std::cout << "Cores Available  : " << (globalConfig.numCPU - running.size()) << "\n";
 
                 std::cout << "\nRunning processes:\n";
                 for (auto* p : running) {

@@ -14,49 +14,49 @@ void Scheduler::initialize(const Config& cfg) {
 void Scheduler::start() {
     running = true;
 
-    // Fixed 10-process test case
-    for (int i = 0; i < 10; ++i) {
-        ProcessControlBlock pcb;
-        std::ostringstream name;
-        name << "p" << std::setw(3) << std::setfill('0') << i;
-        pcb.name = name.str();
-
-
-        auto now = std::chrono::system_clock::now();
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-#ifdef _WIN32
-        std::tm timeinfo;
-        localtime_s(&timeinfo, &now_c);
-#else
-        std::tm timeinfo;
-        localtime_r(&now_c, &timeinfo);
-#endif
-        std::ostringstream oss;
-        oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
-        pcb.startTime = oss.str(); //  assign here
-
-
-
-        for (int j = 0; j < 100; ++j) {
-            Instruction instr;
-            instr.type = InstructionType::PRINT;
-            instr.args = { "Hello world from " + pcb.name };
-            pcb.addInstruction(instr);
-        }
-
-        std::lock_guard<std::mutex> lock(schedulerMutex);
-
-        // FIX: insert first, then use pointer safely
-        auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
-        readyQueue.push(&(it->second)); // correct and safe pointer
-    }
-
+    // Launch CPU worker threads
     for (int i = 0; i < config.numCPU; ++i) {
         cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
     }
 
-    // Removed batch spawn thread
+    // Launch process batch generation loop in a separate thread
+    std::thread([this]() {
+        int id = 0;
+        while (running) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(config.batchFreq * 50));
+
+            ProcessControlBlock pcb;
+            std::ostringstream name;
+            name << "p" << std::setw(3) << std::setfill('0') << id++;
+            pcb.name = name.str();
+
+            auto now = std::chrono::system_clock::now();
+            std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+            std::tm timeinfo;
+#ifdef _WIN32
+            localtime_s(&timeinfo, &now_c);
+#else
+            localtime_r(&now_c, &timeinfo);
+#endif
+            std::ostringstream oss;
+            oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
+            pcb.startTime = oss.str();
+
+            int numInstructions = config.minIns;
+            if (config.minIns < config.maxIns) {
+                numInstructions += rand() % (config.maxIns - config.minIns + 1);
+            }
+            
+            pcb.generateInstructions(numInstructions);
+
+            std::lock_guard<std::mutex> lock(schedulerMutex);
+            auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+            readyQueue.push(&(it->second));
+        }
+        }).detach();
 }
+
+
 
 
 void Scheduler::stop() {
@@ -119,10 +119,26 @@ std::vector<ProcessControlBlock*> Scheduler::getFinishedProcesses() {
 
 void Scheduler::reportUtilization(bool toFile) {
     std::ostringstream report;
-    report << "CPU Cores     : " << config.numCPU << "\n";
-    report << "CPU Tick      : " << cpuTick << "\n";
-    report << "Running Procs : " << getRunningProcesses().size() << "\n";
-    report << "Finished Procs: " << getFinishedProcesses().size() << "\n";
+    auto running = getRunningProcesses();
+    auto finished = getFinishedProcesses();
+
+    report << "=== CPU UTILIZATION ===\n";
+    report << "CPU Cores        : " << config.numCPU << "\n";
+    report << "Cores In Use     : " << running.size() << "\n";
+    report << "Cores Available  : " << (config.numCPU - running.size()) << "\n";
+
+    report << "\n=== RUNNING PROCESSES ===\n";
+    for (auto* p : running) {
+        report << p->name << " (" << p->getStartTime() << ")  "
+            << "Core: " << p->lastExecutedCore << " "
+            << p->instructionPointer << "/" << p->totalInstructions() << "\n";
+    }
+
+    report << "\n=== FINISHED PROCESSES ===\n";
+    for (auto* p : finished) {
+        report << p->name << " (" << p->getStartTime() << ") "
+            << "Finished " << p->instructionPointer << "/" << p->totalInstructions() << "\n";
+    }
 
     if (toFile) {
         std::ofstream out("csopesy-log.txt");
