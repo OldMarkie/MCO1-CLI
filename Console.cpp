@@ -7,6 +7,7 @@
 #include <sstream>
 #include <fstream>
 #include "Scheduler.h"
+#include <unordered_set>
 
 std::unordered_map<std::string, ScreenSession> sessions;
 extern bool isInitialized;
@@ -55,10 +56,22 @@ void Console::drawMainMenu() {
                 auto running = scheduler.getRunningProcesses();
                 auto finished = scheduler.getFinishedProcesses();
 
+                std::unordered_set<int> activeCores;
+                for (auto* p : running) {
+                    if (!p->isFinished) {
+                        activeCores.insert(p->lastExecutedCore);
+                    }
+                }
+                int coresInUse = static_cast<int>(activeCores.size());
+
+                int totalCores = globalConfig.numCPU;
+
+                int coresAvailable = std::max(0, globalConfig.numCPU - coresInUse);
+
                 std::cout << "\n=== CPU UTILIZATION ===\n";
                 std::cout << "CPU Cores        : " << globalConfig.numCPU << "\n";
-                std::cout << "Cores In Use     : " << running.size() << "\n";
-                std::cout << "Cores Available  : " << (globalConfig.numCPU - running.size()) << "\n";
+                std::cout << "Cores In Use     : " << coresInUse << "\n";
+                std::cout << "Cores Available  : " << coresAvailable << "\n";
 
                 std::cout << "\nRunning processes:\n";
                 for (auto* p : running) {
@@ -85,9 +98,10 @@ void Console::drawMainMenu() {
             std::cout << "Scheduler started.\n\n";
         }
         else if (uChoice == "scheduler-stop") {
-            scheduler.stop();
-            std::cout << "Scheduler stopped.\n\n";
+            scheduler.stopProcessGeneration();  // ONLY stops dummy process creation
+            std::cout << "Dummy process generation stopped.\n";
         }
+
         else if (uChoice == "report-util") {
             scheduler.reportUtilization(true);
             std::cout << "CPU utilization saved to csopesy-log.txt\n\n";
@@ -99,6 +113,7 @@ void Console::drawMainMenu() {
         }
         else if (uChoice == "exit") {
             isRunning = false;
+            scheduler.stop();
         }
         else {
             Console::showUnknownCommand();

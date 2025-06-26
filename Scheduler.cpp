@@ -6,6 +6,7 @@
 #include <chrono>
 #include <thread>
 #include <random>
+#include <unordered_set>
 
 void Scheduler::initialize(const Config& cfg) {
     config = cfg;
@@ -13,17 +14,19 @@ void Scheduler::initialize(const Config& cfg) {
 
 void Scheduler::start() {
     running = true;
+    acceptingNewProcesses = true;  //  start dummy generation
 
     // Launch CPU worker threads
     for (int i = 0; i < config.numCPU; ++i) {
         cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
     }
 
-    // Launch process batch generation loop in a separate thread
-    std::thread([this]() {
+    // Launch dummy process generator in a managed thread
+    processGenThread = std::thread([this]() {
         int id = 0;
-        while (running) {
+        while (acceptingNewProcesses) {
             std::this_thread::sleep_for(std::chrono::milliseconds(config.batchFreq * 50));
+            if (!acceptingNewProcesses) break;
 
             ProcessControlBlock pcb;
             std::ostringstream name;
@@ -46,16 +49,22 @@ void Scheduler::start() {
             if (config.minIns < config.maxIns) {
                 numInstructions += rand() % (config.maxIns - config.minIns + 1);
             }
-            
+
             pcb.generateInstructions(numInstructions);
 
             std::lock_guard<std::mutex> lock(schedulerMutex);
             auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
             readyQueue.push(&(it->second));
         }
-        }).detach();
+        });
 }
 
+void Scheduler::stopProcessGeneration() {
+    acceptingNewProcesses = false;
+    if (processGenThread.joinable()) {
+        processGenThread.join();  //  cleanly stop dummy generation
+    }
+}
 
 
 
@@ -122,10 +131,21 @@ void Scheduler::reportUtilization(bool toFile) {
     auto running = getRunningProcesses();
     auto finished = getFinishedProcesses();
 
+    //  Accurately count unique cores in use
+    std::unordered_set<int> activeCores;
+    for (auto* p : running) {
+        if (!p->isFinished) {
+            activeCores.insert(p->lastExecutedCore);
+        }
+    }
+    int coresInUse = static_cast<int>(activeCores.size());
+    int coresAvailable = std::max(0, config.numCPU - coresInUse);
+
+    //  Report with correct core count
     report << "=== CPU UTILIZATION ===\n";
     report << "CPU Cores        : " << config.numCPU << "\n";
-    report << "Cores In Use     : " << running.size() << "\n";
-    report << "Cores Available  : " << (config.numCPU - running.size()) << "\n";
+    report << "Cores In Use     : " << coresInUse << "\n";
+    report << "Cores Available  : " << coresAvailable << "\n";
 
     report << "\n=== RUNNING PROCESSES ===\n";
     for (auto* p : running) {
@@ -149,3 +169,4 @@ void Scheduler::reportUtilization(bool toFile) {
         std::cout << report.str();
     }
 }
+

@@ -20,6 +20,8 @@ public:
     std::vector<ProcessControlBlock*> getRunningProcesses();
     std::vector<ProcessControlBlock*> getFinishedProcesses();
     void reportUtilization(bool toFile = false);
+    void stopProcessGeneration();  
+
 
 private:
     Config config;
@@ -34,7 +36,10 @@ private:
     std::vector<ProcessControlBlock*> finishedProcesses;
 
 
+    std::atomic<bool> acceptingNewProcesses{ false };
+    std::thread processGenThread;
 
+ 
     void cpuLoop(int coreId);
     ProcessControlBlock createRandomProcess(int id);
 };
