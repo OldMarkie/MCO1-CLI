@@ -88,7 +88,13 @@ void Scheduler::cpuLoop(int coreId) {
         }
 
         if (process) {
-            process->executeNextInstruction(coreId);
+            int executed = 0;
+            int quantum = (config.scheduler == "rr") ? config.quantumCycles : INT_MAX;
+
+            while (!process->isFinished && executed < quantum) {
+                process->executeNextInstruction(coreId);
+                ++executed;
+            }
             std::lock_guard<std::mutex> lock(schedulerMutex);
             if (process->isFinished) {
                 finishedProcesses.push_back(process);

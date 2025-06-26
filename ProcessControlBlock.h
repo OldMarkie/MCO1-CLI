@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iostream>
 #include <cstdint>
+#include <variant>
 
 enum class InstructionType {
     DECLARE,
@@ -18,9 +19,11 @@ enum class InstructionType {
     FOR_END
 };
 
+using InstructionArg = std::variant<std::string, uint16_t>;
+
 struct Instruction {
     InstructionType type;
-    std::vector<std::string> args;
+    std::vector<InstructionArg> args;
 };
 
 class ProcessControlBlock {
