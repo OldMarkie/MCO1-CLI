@@ -176,3 +176,39 @@ void Scheduler::reportUtilization(bool toFile) {
     }
 }
 
+void Scheduler::createNamedProcess(const std::string& name) {
+
+    if (!running) {
+        running = true;
+        for (int i = 0; i < config.numCPU; ++i) {
+            cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
+        }
+    }
+
+    ProcessControlBlock pcb;
+    pcb.name = name;
+
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm timeinfo;
+#ifdef _WIN32
+    localtime_s(&timeinfo, &now_c);
+#else
+    localtime_r(&now_c, &timeinfo);
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
+    pcb.startTime = oss.str();
+
+    int numInstructions = config.minIns;
+    if (config.minIns < config.maxIns) {
+        numInstructions += rand() % (config.maxIns - config.minIns + 1);
+    }
+
+    pcb.generateInstructions(numInstructions);
+
+    std::lock_guard<std::mutex> lock(schedulerMutex);
+    auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+    readyQueue.push(&(it->second));
+}
+

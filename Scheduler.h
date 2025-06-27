@@ -21,6 +21,9 @@ public:
     std::vector<ProcessControlBlock*> getFinishedProcesses();
     void reportUtilization(bool toFile = false);
     void stopProcessGeneration();  
+    std::unordered_map<std::string, ProcessControlBlock> allProcesses;
+    std::mutex schedulerMutex;
+    void createNamedProcess(const std::string& name);
 
 
 private:
@@ -29,10 +32,10 @@ private:
     std::atomic<int> cpuTick{ 0 };
 
     std::vector<std::thread> cpuThreads;
-    std::mutex schedulerMutex;
+    
 
     std::queue<ProcessControlBlock*> readyQueue;
-    std::unordered_map<std::string, ProcessControlBlock> allProcesses;
+    
     std::vector<ProcessControlBlock*> finishedProcesses;
 
 

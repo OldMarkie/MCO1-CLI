@@ -39,13 +39,22 @@ void Console::drawMainMenu() {
 
             if (screenCmd == "-s") {
                 std::cin >> screenName;
+                
+                scheduler.createNamedProcess(screenName);
+                
                 sessions[screenName] = createNewScreenSession(screenName);
                 cmdArt::displayNewSesh(screenName);
-                Console::drawScreenSession(screenName);
+                Console::drawScreenSession(screenName);  // enters interactive session
             }
             else if (screenCmd == "-r") {
                 std::cin >> screenName;
-                if (sessions.find(screenName) != sessions.end()) {
+
+                std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
+                auto it = scheduler.allProcesses.find(screenName);
+                if (it != scheduler.allProcesses.end() && !it->second.isFinished) {
+                    if (sessions.find(screenName) == sessions.end()) {
+                        sessions[screenName] = createNewScreenSession(screenName);
+                    }
                     Console::drawScreenSession(screenName);
                 }
                 else {
