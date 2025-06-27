@@ -20,7 +20,7 @@ enum class InstructionType {
     FOR_END
 };
 
-using InstructionArg = std::variant<std::string, uint16_t>;
+using InstructionArg = std::variant<std::string, uint16_t, uint8_t>;
 
 struct ForContext {
     int startIndex;

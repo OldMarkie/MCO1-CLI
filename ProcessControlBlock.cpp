@@ -28,22 +28,25 @@ int safeStoi(const std::string& s, int fallback = 0) {
     }
 }
 
-void ProcessControlBlock::generateInstructions(int count, int nesting) {
+void ProcessControlBlock::generateInstructions(int remaining, int nesting) {
     static const std::vector<InstructionType> types = {
-        InstructionType::DECLARE,
-        InstructionType::ADD,
-        InstructionType::SUBTRACT,
-        InstructionType::PRINT,
-        InstructionType::SLEEP
+        InstructionType::DECLARE, InstructionType::ADD,
+        InstructionType::SUBTRACT, InstructionType::PRINT, InstructionType::SLEEP
     };
 
-    for (int i = 0; i < count; ++i) {
-        // Random chance to insert a FOR loop if nesting is allowed
-        if (nesting < 3 && rand() % 5 == 0) {
+    while (remaining > 0) {
+        // Try FOR loop if space allows for FOR_START + FOR_END + body
+        if (nesting < 3 && remaining >= 4 && rand() % 100 < 1) {
             int repeats = 2 + rand() % 3;
             instructions.push_back({ InstructionType::FOR_START, { InstructionArg(uint16_t(repeats)) } });
-            generateInstructions(2 + rand() % 3, nesting + 1); // recursively generate inner instructions
+            --remaining;
+
+            int bodySize = std::min(remaining - 1, 2 + rand() % 3);
+            generateInstructions(bodySize, nesting + 1);
+            remaining -= bodySize;
+
             instructions.push_back({ InstructionType::FOR_END, {} });
+            --remaining;
             continue;
         }
 
@@ -70,12 +73,14 @@ void ProcessControlBlock::generateInstructions(int count, int nesting) {
         case InstructionType::SLEEP:
             instr.args = { InstructionArg(uint16_t(1 + rand() % 5)) };
             break;
-        default:
-            break;
         }
+
         instructions.push_back(instr);
+        --remaining;
     }
 }
+
+
 
 
 void ProcessControlBlock::executeNextInstruction(int coreId) {
