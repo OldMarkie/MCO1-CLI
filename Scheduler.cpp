@@ -50,7 +50,7 @@ void Scheduler::start() {
                 numInstructions += rand() % (config.maxIns - config.minIns + 1);
             }
 
-            pcb.generateInstructions(numInstructions);
+            pcb.generateInstructions(numInstructions,0);
 
             std::lock_guard<std::mutex> lock(schedulerMutex);
             auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
@@ -116,7 +116,7 @@ ProcessControlBlock Scheduler::createRandomProcess(int id) {
     name << "p" << std::setw(3) << std::setfill('0') << id;
     pcb.name = name.str();
     int numInstructions = config.minIns + rand() % (config.maxIns - config.minIns + 1);
-    pcb.generateInstructions(numInstructions);
+    pcb.generateInstructions(numInstructions,0);
     return pcb;
 }
 
@@ -205,7 +205,7 @@ void Scheduler::createNamedProcess(const std::string& name) {
         numInstructions += rand() % (config.maxIns - config.minIns + 1);
     }
 
-    pcb.generateInstructions(numInstructions);
+    pcb.generateInstructions(numInstructions,0);
 
     std::lock_guard<std::mutex> lock(schedulerMutex);
     auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));

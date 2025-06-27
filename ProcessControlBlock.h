@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cstdint>
 #include <variant>
+#include <stack>
 
 enum class InstructionType {
     DECLARE,
@@ -20,6 +21,13 @@ enum class InstructionType {
 };
 
 using InstructionArg = std::variant<std::string, uint16_t>;
+
+struct ForContext {
+    int startIndex;
+    int remaining;
+};
+
+
 
 struct Instruction {
     InstructionType type;
@@ -39,7 +47,7 @@ public:
     int instructionPointer = 0;
     bool isFinished = false;
 
-    void generateInstructions(int count);
+    void generateInstructions(int count, int nesting);
     void executeNextInstruction(int coreID);
     std::string getLog() const;
 
@@ -58,6 +66,7 @@ private:
     std::vector<Instruction> instructions;
     std::unordered_map<std::string, uint16_t> variables;
     std::ostringstream logs;
+    std::stack<ForContext> forStack;
 
    
 

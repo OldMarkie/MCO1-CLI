@@ -8,6 +8,7 @@
 #include <iomanip> // Add for time formatting
 #include <iostream> 
 
+
 uint16_t resolveValue(const InstructionArg& arg, std::unordered_map<std::string, uint16_t>& variables) {
     if (auto val = std::get_if<uint16_t>(&arg)) return *val;
     if (auto var = std::get_if<std::string>(&arg)) {
@@ -27,7 +28,7 @@ int safeStoi(const std::string& s, int fallback = 0) {
     }
 }
 
-void ProcessControlBlock::generateInstructions(int count) {
+void ProcessControlBlock::generateInstructions(int count, int nesting) {
     static const std::vector<InstructionType> types = {
         InstructionType::DECLARE,
         InstructionType::ADD,
@@ -36,15 +37,23 @@ void ProcessControlBlock::generateInstructions(int count) {
         InstructionType::SLEEP
     };
 
-
     for (int i = 0; i < count; ++i) {
+        // Random chance to insert a FOR loop if nesting is allowed
+        if (nesting < 3 && rand() % 5 == 0) {
+            int repeats = 2 + rand() % 3;
+            instructions.push_back({ InstructionType::FOR_START, { InstructionArg(uint16_t(repeats)) } });
+            generateInstructions(2 + rand() % 3, nesting + 1); // recursively generate inner instructions
+            instructions.push_back({ InstructionType::FOR_END, {} });
+            continue;
+        }
+
         Instruction instr;
         instr.type = types[rand() % types.size()];
         switch (instr.type) {
         case InstructionType::DECLARE:
             instr.args = {
-                InstructionArg("var" + std::to_string(rand() % 100)),               
-                InstructionArg(uint16_t(rand() % 65536))                          
+                InstructionArg("var" + std::to_string(rand() % 100)),
+                InstructionArg(uint16_t(rand() % 65536))
             };
             break;
         case InstructionType::ADD:
@@ -56,15 +65,10 @@ void ProcessControlBlock::generateInstructions(int count) {
             };
             break;
         case InstructionType::PRINT:
-            instr.args = {
-                InstructionArg("Hello world from " + name + "!")
-            };
-
+            instr.args = { InstructionArg("Hello world from " + name + "!") };
             break;
         case InstructionType::SLEEP:
-            instr.args = {
-                InstructionArg(uint16_t(1 + rand() % 3))                           // sleep ticks (1–3)
-            };
+            instr.args = { InstructionArg(uint16_t(1 + rand() % 5)) };
             break;
         default:
             break;
@@ -73,6 +77,7 @@ void ProcessControlBlock::generateInstructions(int count) {
     }
 }
 
+
 void ProcessControlBlock::executeNextInstruction(int coreId) {
     if (instructionPointer >= instructions.size()) {
         isFinished = true;
@@ -80,11 +85,38 @@ void ProcessControlBlock::executeNextInstruction(int coreId) {
         return;
     }
 
-    lastExecutedCore = coreId; // <- record core
     Instruction& current = instructions[instructionPointer];
+
+    if (current.type == InstructionType::FOR_START) {
+        int repeats = std::get<uint16_t>(current.args[0]);
+        forStack.push({ instructionPointer, repeats });
+        ++instructionPointer;
+        return;
+    }
+
+    if (current.type == InstructionType::FOR_END) {
+        if (!forStack.empty()) {
+            ForContext& top = forStack.top();
+            top.remaining--;
+            if (top.remaining > 0) {
+                instructionPointer = top.startIndex + 1;  // go back inside the loop
+            }
+            else {
+                forStack.pop(); // done looping
+                ++instructionPointer;
+            }
+        }
+        else {
+            ++instructionPointer; // malformed loop, just move on
+        }
+        return;
+    }
+
+    lastExecutedCore = coreId;
     execute(current, coreId);
     ++instructionPointer;
 }
+
 
 
 void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
