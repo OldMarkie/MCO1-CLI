@@ -33,7 +33,7 @@ int main() {
     }
 
     scheduler.initialize(globalConfig);
-    isInitialized = true;
+    isInitialized = false;
 
     Console::drawMainMenu();
     return 0;

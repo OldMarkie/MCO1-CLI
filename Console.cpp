@@ -24,7 +24,7 @@ void Console::drawMainMenu() {
         std::cout << "Enter command: ";
         std::cin >> uChoice;
 
-        if (!isInitialized && uChoice != "initialize" && uChoice != "exit") {
+        if (!isInitialized && uChoice != "initialize" && uChoice != "exit" && uChoice != "clear") {
             std::cout << "System not initialized. Use 'initialize' first.\n\n";
             continue;
         }
@@ -162,6 +162,7 @@ void Console::drawScreenSession(const std::string& screenName) {
         if (cmd == "exit") {
             Console::clear();
             Console::showArt();
+            cmdArt::showMenu();
             return;
         }
         else if (cmd == "process-smi") {
