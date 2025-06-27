@@ -4,6 +4,9 @@
 
 #include <iostream>
 #include "ScreenSession.h"
+#include "Scheduler.h"
+
+extern Scheduler scheduler;
 
 class cmdArt {
 public:
@@ -41,7 +44,13 @@ _| """ |_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| {======|_|"""""
     static void screenMenu(const std::string& screenName, const ScreenSession& s) {
         std::cout << "\n==== Screen Console Placeholder ====\n";
         std::cout << "Process Name      : " << s.processName << "\n";
-        std::cout << "Instruction Line  : " << s.currentLine << " / " << s.totalLines << "\n";
+
+        if (scheduler.allProcesses.find(screenName) != scheduler.allProcesses.end()) {
+            const auto& pcb = scheduler.allProcesses.at(screenName);
+            std::cout << "Instruction Line  : " << (pcb.instructionPointer + 1)
+                << " / " << pcb.totalInstructions() << "\n";
+        }
+
         std::cout << "Created At        : " << s.timestamp << "\n";
         std::cout << "====================================\n";
 

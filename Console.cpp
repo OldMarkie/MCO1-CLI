@@ -42,18 +42,20 @@ void Console::drawMainMenu() {
                 
                 scheduler.createNamedProcess(screenName);
                 
-                sessions[screenName] = createNewScreenSession(screenName);
+                auto& pcb = scheduler.allProcesses.at(screenName);
+                sessions[screenName] = createNewScreenSession(pcb.name);
                 cmdArt::displayNewSesh(screenName);
                 Console::drawScreenSession(screenName);  // enters interactive session
             }
             else if (screenCmd == "-r") {
                 std::cin >> screenName;
 
-                std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
+                //std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
                 auto it = scheduler.allProcesses.find(screenName);
                 if (it != scheduler.allProcesses.end() && !it->second.isFinished) {
                     if (sessions.find(screenName) == sessions.end()) {
-                        sessions[screenName] = createNewScreenSession(screenName);
+                        auto& pcb = scheduler.allProcesses.at(screenName);
+                        sessions[screenName] = createNewScreenSession(pcb.name);
                     }
                     Console::drawScreenSession(screenName);
                 }
@@ -131,51 +133,55 @@ void Console::drawMainMenu() {
 }
 
 void Console::drawScreenSession(const std::string& screenName) {
-    cmdArt::visualClear();
-    auto it = sessions.find(screenName);
-    if (it == sessions.end()) {
-        std::cerr << "Screen not found.\n";
-        return;
-    }
+    while (true) {
+        Console::clear();
 
-    bool inScreen = true;
-    const ScreenSession& session = it->second;
-    cmdArt::screenMenu(screenName, session);
+        std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
+        auto it = scheduler.allProcesses.find(screenName);
+        if (it == scheduler.allProcesses.end()) {
+            std::cout << "Process not found.\n";
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            return;
+        }
 
-    while (inScreen) {
-        std::string screenInput;
-        std::cin >> screenInput;
+        const auto& pcb = it->second;
 
-        if (screenInput == "exit") {
-            inScreen = false;
+        // Header info
+        std::cout << "\n==== Process Console ====\n";
+        std::cout << "Process Name      : " << pcb.name << "\n";
+        std::cout << "Instruction Line  : " << (pcb.instructionPointer + 1)
+            << " / " << pcb.totalInstructions() << "\n";
+        std::cout << "Created At        : " << pcb.getStartTime() << "\n";
+        std::cout << "=========================\n";
+        std::cout << "Commands: process-smi | exit\n\n> ";
+
+        // Read user input
+        std::string cmd;
+        std::cin >> cmd;
+
+        if (cmd == "exit") {
             Console::clear();
             Console::showArt();
+            return;
         }
-        else if (screenInput == "process-smi") {
-            auto running = scheduler.getRunningProcesses();
-            auto finished = scheduler.getFinishedProcesses();
-            ProcessControlBlock* target = nullptr;
-            for (auto* p : running) if (p->name == screenName) target = p;
-            for (auto* p : finished) if (p->name == screenName) target = p;
-
-            if (target) {
-                std::cout << "\n--- Process Info ---\n";
-                std::cout << "Process: " << target->name << (target->isFinished ? " [Finished]" : " [Running]") << "\n";
-                std::cout << target->getLog() << "\n";
-            }
-            else {
-                std::cout << "Process " << screenName << " not found.\n";
-            }
-
-            std::cout << "> ";
+        else if (cmd == "process-smi") {
+            std::cout << "\n--- Process Info ---\n";
+            std::cout << "Process: " << pcb.name << (pcb.isFinished ? " [Finished]" : " [Running]") << "\n";
+            std::cout << pcb.getLog() << "\n";
+            std::cout << "---------------------\n";
+            std::cout << "Press Enter to continue...";
+            std::cin.ignore();
+            std::cin.get();
         }
         else {
-            Console::clear();
-            Console::showUnknownCommand();
-            cmdArt::screenMenu(screenName, session);
+            std::cout << "Unknown command.\n";
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
 }
+
+
+
 
 void Console::showUnknownCommand() {
     std::cout << "\033[1;31mUnknown command.\033[0m\n\n";
