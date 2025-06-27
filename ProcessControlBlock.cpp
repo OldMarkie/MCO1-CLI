@@ -140,12 +140,27 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
             variables[dest] = (left > right) ? (left - right) : 0;
     }
     else if (ins.type == InstructionType::PRINT) {
-        if (auto msg = std::get_if<std::string>(&ins.args[0])) {
-            logs << "[LOG] " << *msg << "\n";
-        }
-        else {
-            logs << "[LOG] [INVALID PRINT ARGUMENT]\n";
-        }
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        std::tm timeinfo;
+    #ifdef _WIN32
+            localtime_s(&timeinfo, &now_c);
+    #else
+            localtime_r(&now_c, &timeinfo);
+    #endif
+            std::ostringstream timeStream;
+            timeStream << std::put_time(&timeinfo, "%I:%M:%S%p");
+
+            if (auto msg = std::get_if<std::string>(&ins.args[0])) {
+                logs << "[" << timeStream.str() << "] "
+                    << "[Core " << coreId << "] "
+                    << *msg << "\n";
+            }
+            else {
+                logs << "[" << timeStream.str() << "] "
+                    << "[Core " << coreId << "] "
+                    << "[INVALID PRINT ARGUMENT]\n";
+            }
     }
 
     else if (ins.type == InstructionType::SLEEP) {
