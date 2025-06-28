@@ -36,7 +36,7 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting) {
 
     while (remaining > 0) {
         // Try FOR loop if space allows for FOR_START + FOR_END + body
-        if (nesting < 3 && remaining >= 4 && rand() % 100 < 1) {
+        if (nesting < 3 && remaining >= 4 && rand() % 1000 < 1) {
             int repeats = 2 + rand() % 3;
             instructions.push_back({ InstructionType::FOR_START, { InstructionArg(uint16_t(repeats)) } });
             --remaining;
