@@ -9,6 +9,8 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include "MemoryManager.h"
+#include <unordered_set>
 
 class Scheduler {
 public:
@@ -24,6 +26,7 @@ public:
     std::unordered_map<std::string, ProcessControlBlock> allProcesses;
     std::mutex schedulerMutex;
     void createNamedProcess(const std::string& name);
+    std::unordered_set<std::string> allocatedProcesses;
 
 
 private:
@@ -42,7 +45,10 @@ private:
     std::atomic<bool> acceptingNewProcesses{ false };
     std::thread processGenThread;
 
- 
+    MemoryManager memoryManager{ 16384, 4096 }; // totalMemory = 16KB, per process = 4KB
+
+
+
     void cpuLoop(int coreId);
     ProcessControlBlock createRandomProcess(int id);
 };

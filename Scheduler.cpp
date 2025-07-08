@@ -74,11 +74,18 @@ void Scheduler::stop() {
         if (t.joinable()) t.join();
     }
     cpuThreads.clear();
+
+    // Optional: also clear memory on shutdown
+    for (auto& [name, pcb] : allProcesses) {
+        memoryManager.deallocate(name);
+    }
 }
+
 
 void Scheduler::cpuLoop(int coreId) {
     while (running) {
         ProcessControlBlock* process = nullptr;
+
         {
             std::lock_guard<std::mutex> lock(schedulerMutex);
             if (!readyQueue.empty()) {
@@ -88,6 +95,18 @@ void Scheduler::cpuLoop(int coreId) {
         }
 
         if (process) {
+            // Allocate memory only if not already allocated
+            if (allocatedProcesses.find(process->name) == allocatedProcesses.end()) {
+                if (!memoryManager.allocate(process->name)) {
+                    //  Not enough memory, requeue and skip
+                    std::lock_guard<std::mutex> lock(schedulerMutex);
+                    readyQueue.push(process);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(config.delayPerExec * 50));
+                    continue;
+                }
+                allocatedProcesses.insert(process->name);
+            }
+
             int executed = 0;
             int quantum = (config.scheduler == "rr") ? config.quantumCycles : INT_MAX;
 
@@ -95,19 +114,32 @@ void Scheduler::cpuLoop(int coreId) {
                 process->executeNextInstruction(coreId);
                 ++executed;
             }
-            std::lock_guard<std::mutex> lock(schedulerMutex);
-            if (process->isFinished) {
-                finishedProcesses.push_back(process);
+
+            {
+                std::lock_guard<std::mutex> lock(schedulerMutex);
+                if (process->isFinished) {
+                    finishedProcesses.push_back(process);
+                    memoryManager.deallocate(process->name);       //  Free memory
+                    allocatedProcesses.erase(process->name);       //  Remove from tracking
+                }
+                else {
+                    readyQueue.push(process);                      //  Continue next cycle
+                }
             }
-            else {
-                readyQueue.push(process);
-            }
+
+            //  Log memory layout after every quantum
+            std::ofstream snapshot("memory_log.txt", std::ios::app);
+            memoryManager.printMemoryLayout(snapshot);
+            snapshot.close();
         }
 
+        //  Simulate delay between instructions
         std::this_thread::sleep_for(std::chrono::milliseconds(config.delayPerExec * 50));
         ++cpuTick;
     }
 }
+
+
 
 
 ProcessControlBlock Scheduler::createRandomProcess(int id) {
