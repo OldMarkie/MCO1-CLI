@@ -1,1 +1,7 @@
-2 rr 4 1 100 100 0
+2       # numCPU: Number of CPU cores
+rr      # scheduler: Scheduling algorithm (round-robin)
+4       # quantumCycles: Instructions per quantum (only applies if RR)
+1       # batchFreq: Ticks between process generation (smaller = faster spawn)
+100     # minIns: Minimum number of instructions per process
+100     # maxIns: Maximum number of instructions per process
+0       # delayPerExec: Delay multiplier for instruction execution (0 = no delay)
