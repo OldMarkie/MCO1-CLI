@@ -83,6 +83,9 @@ void Scheduler::stop() {
 
 
 void Scheduler::cpuLoop(int coreId) {
+
+    int quantumCycleCounter = 1;
+
     while (running) {
         ProcessControlBlock* process = nullptr;
 
@@ -128,7 +131,9 @@ void Scheduler::cpuLoop(int coreId) {
             }
 
             //  Log memory layout after every quantum
-            std::ofstream snapshot("memory_log.txt", std::ios::app);
+            std::ostringstream filename;
+            filename << "memory_stamp_" << quantumCycleCounter++ << ".txt";
+            std::ofstream snapshot(filename.str());
             memoryManager.printMemoryLayout(snapshot);
             snapshot.close();
         }
