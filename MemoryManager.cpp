@@ -17,11 +17,27 @@ MemoryManager::MemoryManager(int totalMemBytes, int frameSz)
 int MemoryManager::allocateMemory(const std::string& processName, int memSize) {
     int numPages = (memSize + frameSize - 1) / frameSize;
 
+    int freeFrames = std::count_if(frameTable.begin(), frameTable.end(),
+        [](const std::string& s) { return s.empty(); });
+
+    if (freeFrames < numPages) return -1;
+
     pageTables[processName] = std::vector<PageTableEntry>(numPages);
     allocatedBytes[processName] = memSize;
 
+    // Optional: assign pages to frames immediately
+    for (int i = 0; i < numPages; ++i) {
+        int frameIdx = findFreeFrame();
+        if (frameIdx == -1) break;
+        frameTable[frameIdx] = processName + "." + std::to_string(i);
+        pageTables[processName][i] = { frameIdx, true, false }; // valid now
+        pagedIn++;
+    }
+
     return numPages;
 }
+
+
 
 void MemoryManager::freeMemory(const std::string& processName) {
     if (pageTables.find(processName) == pageTables.end()) return;

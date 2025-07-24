@@ -10,6 +10,8 @@
 #include <thread>
 #include <mutex>
 
+
+
 class Scheduler {
 public:
     void initialize(const Config& config);
@@ -28,6 +30,9 @@ public:
     int getCpuTick() const;
     int getActiveTicks() const;
     int getIdleTicks() const;
+
+    ~Scheduler();
+
 
 
 private:

@@ -46,14 +46,21 @@ void Console::drawMainMenu() {
 
             if (screenCmd == "-s") {
                 std::cin >> screenName;
-                
+
                 scheduler.createNamedProcess(screenName);
-                
-                auto& pcb = scheduler.allProcesses.at(screenName);
+
+                auto it = scheduler.allProcesses.find(screenName);
+                if (it == scheduler.allProcesses.end()) {
+                    std::cout << "[ERROR] Process " << screenName << " not found.\n\n";
+                    continue;  //  Avoid crash/freeze and go back to command prompt
+                }
+
+                auto& pcb = it->second;
                 sessions[screenName] = createNewScreenSession(pcb.name);
                 cmdArt::displayNewSesh(screenName);
                 Console::drawScreenSession(screenName);  // enters interactive session
             }
+
             else if (screenCmd == "-c") {
                 std::string name;
                 int memSize;

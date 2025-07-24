@@ -7,6 +7,9 @@
 #include <thread>
 #include <random>
 #include <unordered_set>
+#include "MemoryManager.h"
+
+extern MemoryManager memoryManager;
 
 
 void Scheduler::initialize(const Config& cfg) {
@@ -70,12 +73,21 @@ void Scheduler::stopProcessGeneration() {
 
 
 void Scheduler::stop() {
+    if (!running) return;
     running = false;
+
+    if (processGenThread.joinable()) {
+        processGenThread.join();  // just in case
+    }
+
     for (auto& t : cpuThreads) {
-        if (t.joinable()) t.join();
+        if (t.joinable()) {
+            t.join();
+        }
     }
     cpuThreads.clear();
 }
+
 
 void Scheduler::cpuLoop(int coreId) {
     while (running) {
@@ -183,10 +195,6 @@ void Scheduler::reportUtilization(bool toFile) {
 }
 
 void Scheduler::createNamedProcess(const std::string& name) {
-
-
-
-
     if (!running) {
         running = true;
         for (int i = 0; i < config.numCPU; ++i) {
@@ -196,8 +204,6 @@ void Scheduler::createNamedProcess(const std::string& name) {
 
     ProcessControlBlock pcb;
     pcb.name = name;
-
-
 
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
@@ -216,12 +222,30 @@ void Scheduler::createNamedProcess(const std::string& name) {
         numInstructions += rand() % (config.maxIns - config.minIns + 1);
     }
 
-    pcb.generateInstructions(numInstructions,0);
+    pcb.generateInstructions(numInstructions, 0);
 
+    //  Determine how much memory this process will request
+    int memSize = config.minMemPerProc;
+    if (config.minMemPerProc < config.maxMemPerProc) {
+        memSize += rand() % (config.maxMemPerProc - config.minMemPerProc + 1);
+    }
+
+    //  Ensure thread safety while modifying shared structures
     std::lock_guard<std::mutex> lock(schedulerMutex);
-    auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
-    readyQueue.push(&(it->second));
+
+    //  Attempt memory allocation before allowing the process to run
+    if (memoryManager.allocateMemory(name, memSize) > 0) {
+        auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+        readyQueue.push(&(it->second));
+        std::cout << "[MM] Process " << name << " allocated " << memSize << " bytes and queued.\n";
+    }
+    else {
+        std::cout << "[MM] Memory allocation failed for process " << name
+            << " (requested " << memSize << " bytes). Not enough memory.\n";
+    }
 }
+
+
 
 int Scheduler::getCpuTick() const {
     return cpuTick;
@@ -234,5 +258,10 @@ int Scheduler::getActiveTicks() const {
 int Scheduler::getIdleTicks() const {
     return getCpuTick() * config.numCPU - getActiveTicks();
 }
+
+Scheduler::~Scheduler() {
+    stop();  // cleanly stop CPU threads if still running
+}
+
 
 
