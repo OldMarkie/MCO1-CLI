@@ -1,4 +1,4 @@
-#include "Console.h"
+﻿#include "Console.h"
 #include "cmdArt.h"
 #include <iostream>
 #include <chrono>
@@ -36,17 +36,69 @@ void Console::drawMainMenu() {
         else if (uChoice == "screen") {
             std::string screenCmd, screenName;
             std::cin >> screenCmd;
-
             if (screenCmd == "-s") {
                 std::cin >> screenName;
-                
-                scheduler.createNamedProcess(screenName);
-                
+                int memorySize;
+                std::cin >> memorySize;
+
+                // Validate memory size (power of 2 and >= 64)
+                if (memorySize < 64 || (memorySize & (memorySize - 1)) != 0) {
+                    std::cout << "Invalid memory allocation. Must be a power of 2 and at least 64 bytes.\n\n";
+                    continue;
+                }
+
+                if (!scheduler.createNamedProcess(screenName, memorySize)) {
+                    std::cout << "Failed to create process " << screenName << ". Possibly insufficient memory.\n\n";
+                    continue;
+                }
+
                 auto& pcb = scheduler.allProcesses.at(screenName);
                 sessions[screenName] = createNewScreenSession(pcb.name);
                 cmdArt::displayNewSesh(screenName);
                 Console::drawScreenSession(screenName);  // enters interactive session
             }
+            else if (screenCmd == "-c") {
+                std::cin >> screenName;
+                int memorySize;
+                std::cin >> memorySize;
+
+                std::cin.ignore();  // flush newline
+                std::string rawInput;
+                std::getline(std::cin, rawInput);
+
+                // Strip leading/trailing quotes if present
+                if (!rawInput.empty() && rawInput.front() == '"') rawInput.erase(0, 1);
+                if (!rawInput.empty() && rawInput.back() == '"') rawInput.pop_back();
+
+                // Split by semicolon
+                std::stringstream ss(rawInput);
+                std::string instr;
+                std::vector<std::string> instructions;
+                while (std::getline(ss, instr, ';')) {
+                    if (!instr.empty()) instructions.push_back(instr);
+                }
+
+                if (memorySize < 64 || (memorySize & (memorySize - 1)) != 0) {
+                    std::cout << "Invalid memory allocation. Must be power of 2 and ≥ 64 bytes.\n\n";
+                    continue;
+                }
+
+                if (instructions.empty() || instructions.size() > 50) {
+                    std::cout << "Invalid command. Must provide 1–50 instructions.\n\n";
+                    continue;
+                }
+
+                if (!scheduler.createNamedProcess(screenName, memorySize, instructions)) {
+                    std::cout << "Failed to create process " << screenName << ". Possibly memory full.\n\n";
+                    continue;
+                }
+
+                auto& pcb = scheduler.allProcesses.at(screenName);
+                sessions[screenName] = createNewScreenSession(pcb.name);
+                cmdArt::displayNewSesh(screenName);
+                Console::drawScreenSession(screenName);  // enter interactive view
+            }
+
             else if (screenCmd == "-r") {
                 std::cin >> screenName;
 
@@ -59,9 +111,21 @@ void Console::drawMainMenu() {
                     }
                     Console::drawScreenSession(screenName);
                 }
+                else if (it != scheduler.allProcesses.end()) {
+                    const auto& log = it->second.getLog();
+                    auto errPos = log.find("Memory access violation");
+                    if (errPos != std::string::npos) {
+                        std::cout << "Process " << screenName << " shut down due to memory access violation error.\n";
+                        std::cout << log.substr(errPos) << "\n\n";
+                    }
+                    else {
+                        std::cout << "Process " << screenName << " has finished execution.\n\n";
+                    }
+                }
                 else {
                     std::cout << "Process " << screenName << " not found.\n\n";
                 }
+
             }
             else if (screenCmd == "-ls") {
                 auto running = scheduler.getRunningProcesses();
@@ -126,6 +190,7 @@ void Console::drawMainMenu() {
             isRunning = false;
             scheduler.stop();
         }
+
         else {
             Console::showUnknownCommand();
         }
@@ -174,12 +239,16 @@ void Console::drawScreenSession(const std::string& screenName) {
             std::cin.ignore();
             std::cin.get();
         }
+        else if (cmd == "vmstat") {
+            scheduler.printVMStat();
+        }
         else {
             std::cout << "Unknown command.\n";
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
 }
+
 
 
 

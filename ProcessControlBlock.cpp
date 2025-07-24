@@ -172,6 +172,54 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
         int ticks = static_cast<int>(std::get<uint16_t>(ins.args[0]));
         std::this_thread::sleep_for(std::chrono::milliseconds(ticks * 50));
     }
+    else if (ins.type == InstructionType::READ) {
+        const std::string& var = std::get<std::string>(ins.args[0]);
+        uint32_t address = std::get<uint16_t>(ins.args[1]);
+
+        if (!isValidAddress(address)) {
+            isFinished = true;
+            logs << "[ERROR] Memory access violation at "
+                << std::hex << "0x" << address << ". Process terminated.\n";
+            logs << "[Terminated] at " << getStartTime() << "\n";
+            return;
+        }
+
+        int pageNum = (address - allocatedStart) / pageSize;
+        if (!pageTable[pageNum].valid) {
+            memoryManager.handlePageFault(name, pageNum, pageTable);
+        }
+
+        uint8_t* frame = memoryManager.getFrameData(pageTable[pageNum].frameIndex);
+        int offset = (address - allocatedStart) % pageSize;
+
+        uint16_t val = *reinterpret_cast<uint16_t*>(&frame[offset]);  // get from frame memory
+        variables[var] = val;
+    }
+
+    else if (ins.type == InstructionType::WRITE) {
+        uint32_t address = std::get<uint16_t>(ins.args[0]);
+        uint16_t value = std::get<uint16_t>(ins.args[1]);
+
+        if (!isValidAddress(address)) {
+            isFinished = true;
+            logs << "[ERROR] Memory access violation at "
+                << std::hex << "0x" << address << ". Process terminated.\n";
+            logs << "[Terminated] at " << getStartTime() << "\n";
+            return;
+        }
+
+        int pageNum = (address - allocatedStart) / pageSize;
+        if (!pageTable[pageNum].valid) {
+            memoryManager.handlePageFault(name, pageNum, pageTable);
+        }
+
+        uint8_t* frame = memoryManager.getFrameData(pageTable[pageNum].frameIndex);
+        int offset = (address - allocatedStart) % pageSize;
+
+        *reinterpret_cast<uint16_t*>(&frame[offset]) = value;  // store in physical frame
+        pageTable[pageNum].dirty = true;
+    }
+
 }
 
 std::string ProcessControlBlock::getLog() const {

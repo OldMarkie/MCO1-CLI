@@ -22,11 +22,18 @@ public:
     std::vector<ProcessControlBlock*> getRunningProcesses();
     std::vector<ProcessControlBlock*> getFinishedProcesses();
     void reportUtilization(bool toFile = false);
+    bool createNamedProcess(const std::string& name, int memorySize);
     void stopProcessGeneration();  
     std::unordered_map<std::string, ProcessControlBlock> allProcesses;
     std::mutex schedulerMutex;
     void createNamedProcess(const std::string& name);
     std::unordered_set<std::string> allocatedProcesses;
+    bool createNamedProcess(const std::string& name, int memorySize, const std::vector<std::string>& instructions);
+
+    int getIdleTicks() const;
+
+    void printVMStat() const;
+
 
 
 private:

@@ -17,8 +17,17 @@ enum class InstructionType {
     PRINT,
     SLEEP,
     FOR_START,
-    FOR_END
+    FOR_END,
+    READ,
+    WRITE
 };
+
+struct PageTableEntry {
+    int frameIndex = -1;        // -1 if not in physical memory
+    bool valid = false;         // is the page currently loaded
+    bool dirty = false;         // if written
+};
+
 
 using InstructionArg = std::variant<std::string, uint16_t, uint8_t>;
 
@@ -37,6 +46,11 @@ struct Instruction {
 class ProcessControlBlock {
 public:
     ProcessControlBlock() = default;
+
+    std::unordered_map<int, PageTableEntry> pageTable;
+    int numPages = 0;
+    int pageSize = 0;
+
 
     ProcessControlBlock(const ProcessControlBlock&) = delete;
     ProcessControlBlock& operator=(const ProcessControlBlock&) = delete;
@@ -60,6 +74,14 @@ public:
 
     std::string startTime;
 
+    bool isValidAddress(uint32_t address) const {
+        return address >= allocatedStart && address < allocatedStart + allocatedSize;
+    }
+
+    std::unordered_map<uint32_t, uint16_t> processMemory; // address -> value
+    int allocatedStart = 0;
+    int allocatedSize = 0;
+
 
 
 private:
@@ -67,6 +89,8 @@ private:
     std::unordered_map<std::string, uint16_t> variables;
     std::ostringstream logs;
     std::stack<ForContext> forStack;
+   
+
 
    
 

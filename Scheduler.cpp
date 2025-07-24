@@ -7,6 +7,7 @@
 #include <thread>
 #include <random>
 #include <unordered_set>
+#include "InstructionParser.h"
 
 void Scheduler::initialize(const Config& cfg) {
     config = cfg;
@@ -213,39 +214,84 @@ void Scheduler::reportUtilization(bool toFile) {
     }
 }
 
-void Scheduler::createNamedProcess(const std::string& name) {
+bool Scheduler::createNamedProcess(const std::string& name, int memorySize) {
+    std::lock_guard<std::mutex> lock(schedulerMutex);
 
-    if (!running) {
-        running = true;
-        for (int i = 0; i < config.numCPU; ++i) {
-            cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
-        }
-    }
+    if (allProcesses.count(name)) return false;
+
+    if (!memoryManager.allocate(name, memorySize)) return false;
 
     ProcessControlBlock pcb;
     pcb.name = name;
 
-    auto now = std::chrono::system_clock::now();
-    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::tm timeinfo;
-#ifdef _WIN32
-    localtime_s(&timeinfo, &now_c);
-#else
-    localtime_r(&now_c, &timeinfo);
-#endif
-    std::ostringstream oss;
-    oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
-    pcb.startTime = oss.str();
+    auto blocks = memoryManager.getSortedAllocations();
+    auto it = std::find_if(blocks.begin(), blocks.end(),
+        [&](const MemoryBlock& b) { return b.processName == name; });
 
-    int numInstructions = config.minIns;
-    if (config.minIns < config.maxIns) {
-        numInstructions += rand() % (config.maxIns - config.minIns + 1);
+    if (it != blocks.end()) {
+        pcb.allocatedStart = it->start;
+        pcb.allocatedSize = it->size();
     }
 
-    pcb.generateInstructions(numInstructions,0);
+    pcb.generateInstructions(rand() % (config.maxIns - config.minIns + 1) + config.minIns, 0);
 
-    std::lock_guard<std::mutex> lock(schedulerMutex);
-    auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
-    readyQueue.push(&(it->second));
+    allProcesses[name] = std::move(pcb);
+    readyQueue.push(&allProcesses[name]);
+    allocatedProcesses.insert(name);
+
+    return true;
 }
+
+
+bool Scheduler::createNamedProcess(const std::string& name, int memorySize, const std::vector<std::string>& rawInstructions) {
+    std::lock_guard<std::mutex> lock(schedulerMutex);
+
+    if (allProcesses.count(name)) return false;
+
+    if (!memoryManager.allocate(name, memorySize)) return false;
+
+    ProcessControlBlock pcb;
+    pcb.name = name;
+
+    auto blocks = memoryManager.getSortedAllocations();
+    auto it = std::find_if(blocks.begin(), blocks.end(),
+        [&](const MemoryBlock& b) { return b.processName == name; });
+
+    if (it != blocks.end()) {
+        pcb.allocatedStart = it->start;
+        pcb.allocatedSize = it->size();
+    }
+
+    for (const auto& instrStr : rawInstructions) {
+        auto parsed = InstructionParser::parse(instrStr, name);
+        if (parsed.has_value()) {
+            pcb.addInstruction(parsed.value());
+        }
+        else {
+            std::cout << "Skipping invalid instruction: " << instrStr << "\n";
+        }
+    }
+
+    allProcesses[name] = std::move(pcb);
+    readyQueue.push(&allProcesses[name]);
+    allocatedProcesses.insert(name);
+
+    return true;
+}
+
+int Scheduler::getIdleTicks() const { return idleTicks.load(); }
+
+
+void Scheduler::printVMStat() const {
+    std::cout << "=== VMSTAT ===\n";
+    std::cout << "Total Frames     : " << memoryManager.getTotalFrames() << "\n";
+    std::cout << "Used Frames      : " << memoryManager.getUsedFrames() << "\n";
+    std::cout << "Free Frames      : " << memoryManager.getFreeFrames() << "\n";
+    std::cout << "Page Faults      : " << memoryManager.getPageFaults() << "\n";
+    std::cout << "Pages Swapped In : " << memoryManager.getPagesSwappedIn() << "\n";
+    std::cout << "Pages Swapped Out: " << memoryManager.getPagesSwappedOut() << "\n";
+    std::cout << "Idle Ticks       : " << getIdleTicks() << "\n";
+}
+
+
 
