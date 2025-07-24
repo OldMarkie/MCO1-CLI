@@ -20,6 +20,17 @@ void Scheduler::start() {
     running = true;
     acceptingNewProcesses = true;  //  start dummy generation
 
+    // Launch background thread to retry waiting process memory allocation
+    checkWaitingQueueRunning = true;
+    waitingQueueThread = std::thread([this]() {
+        while (checkWaitingQueueRunning) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200)); // or adjust to your liking
+            std::lock_guard<std::mutex> lock(schedulerMutex);
+            checkWaitingQueue();
+        }
+        });
+
+
     // Launch CPU worker threads
     for (int i = 0; i < config.numCPU; ++i) {
         cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
@@ -80,6 +91,12 @@ void Scheduler::stop() {
         processGenThread.join();  // just in case
     }
 
+    checkWaitingQueueRunning = false;
+    if (waitingQueueThread.joinable()) {
+        waitingQueueThread.join();
+    }
+
+
     for (auto& t : cpuThreads) {
         if (t.joinable()) {
             t.join();
@@ -112,8 +129,13 @@ void Scheduler::cpuLoop(int coreId) {
             }
             std::lock_guard<std::mutex> lock(schedulerMutex);
             if (process->isFinished) {
+                memoryManager.freeMemory(process->name);  //  FREE THE MEMORY
+                std::cout << "[MM] Memory freed for finished process " << process->name << ".\n";
+
                 finishedProcesses.push_back(process);
+                checkWaitingQueue();  //  this will now succeed
             }
+
             else {
                 readyQueue.push(process);
             }
@@ -234,15 +256,18 @@ void Scheduler::createNamedProcess(const std::string& name) {
     std::lock_guard<std::mutex> lock(schedulerMutex);
 
     //  Attempt memory allocation before allowing the process to run
+    auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+    ProcessControlBlock& procRef = it->second;
+
     if (memoryManager.allocateMemory(name, memSize) > 0) {
-        auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
-        readyQueue.push(&(it->second));
+        readyQueue.push(&procRef);
         std::cout << "[MM] Process " << name << " allocated " << memSize << " bytes and queued.\n";
     }
     else {
-        std::cout << "[MM] Memory allocation failed for process " << name
-            << " (requested " << memSize << " bytes). Not enough memory.\n";
+        waitingQueue.push(&procRef);  // add to waiting list
+        std::cout << "[MM] Memory full. Process " << name << " added to waiting queue.\n";
     }
+
 }
 
 
@@ -262,6 +287,27 @@ int Scheduler::getIdleTicks() const {
 Scheduler::~Scheduler() {
     stop();  // cleanly stop CPU threads if still running
 }
+
+void Scheduler::checkWaitingQueue() {
+    std::queue<ProcessControlBlock*> stillWaiting;
+
+    while (!waitingQueue.empty()) {
+        ProcessControlBlock* pcb = waitingQueue.front();
+        waitingQueue.pop();
+
+        if (memoryManager.allocateMemory(pcb->name, config.maxMemPerProc) > 0) {
+            readyQueue.push(pcb);
+            std::cout << "[MM] Delayed allocation succeeded for " << pcb->name << ". Added to ready queue.\n";
+        }
+        else {
+            stillWaiting.push(pcb);
+        }
+    }
+
+    waitingQueue = std::move(stillWaiting);
+}
+
+
 
 
 

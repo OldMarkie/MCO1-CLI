@@ -156,25 +156,27 @@ void Console::drawMainMenu() {
 
                 std::unordered_set<int> activeCores;
                 for (auto* p : running) {
-                    if (!p->isFinished) {
+                    if (!p->isFinished && p->lastExecutedCore >= 0) {
                         activeCores.insert(p->lastExecutedCore);
                     }
                 }
                 int coresInUse = static_cast<int>(activeCores.size());
-
                 int totalCores = globalConfig.numCPU;
-
-                int coresAvailable = std::max(0, globalConfig.numCPU - coresInUse);
+                int coresAvailable = std::max(0, totalCores - coresInUse);
 
                 std::cout << "\n=== CPU UTILIZATION ===\n";
-                std::cout << "CPU Cores        : " << globalConfig.numCPU << "\n";
+                std::cout << "CPU Cores        : " << totalCores << "\n";
                 std::cout << "Cores In Use     : " << coresInUse << "\n";
                 std::cout << "Cores Available  : " << coresAvailable << "\n";
 
                 std::cout << "\nRunning processes:\n";
                 for (auto* p : running) {
+                    std::string coreDisplay = (p->lastExecutedCore >= 0)
+                        ? std::to_string(p->lastExecutedCore)
+                        : "Queued";
+
                     std::cout << p->name << " (" << p->getStartTime() << ")  "
-                        << "Core: " << p->lastExecutedCore << " "
+                        << "Core: " << coreDisplay << " "
                         << p->instructionPointer << "/" << p->totalInstructions() << "\n";
                 }
 
@@ -185,11 +187,10 @@ void Console::drawMainMenu() {
                 }
 
                 std::cout << std::endl;
-            }
+                }
             else {
-                std::cout << "Invalid screen command. Use '-s <name>', '-r <name>', or '-ls'.\n\n";
-            }
-
+                    std::cout << "Invalid screen command. Use '-s <name>', '-r <name>', or '-ls'.\n\n";
+                    }
         }
         else if (uChoice == "scheduler-start") {
             scheduler.start();
