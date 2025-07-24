@@ -17,7 +17,9 @@ enum class InstructionType {
     PRINT,
     SLEEP,
     FOR_START,
-    FOR_END
+    FOR_END,
+    READ,       // NEW
+    WRITE       // NEW
 };
 
 using InstructionArg = std::variant<std::string, uint16_t, uint8_t>;
@@ -59,6 +61,11 @@ public:
     int lastExecutedCore = -1; // updated during execution
 
     std::string startTime;
+
+    std::string violationTime = "";
+    std::string violationAddr = "";
+    std::string currentTimeString() const;
+
 
 
 

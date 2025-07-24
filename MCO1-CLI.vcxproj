@@ -130,6 +130,7 @@
   <ItemGroup>
     <ClCompile Include="Console.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MemoryManager.cpp" />
     <ClCompile Include="ProcessControlBlock.cpp" />
     <ClCompile Include="Scheduler.cpp" />
   </ItemGroup>
@@ -137,6 +138,7 @@
     <ClInclude Include="cmdArt.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="Console.h" />
+    <ClInclude Include="MemoryManager.h" />
     <ClInclude Include="ProcessControlBlock.h" />
     <ClInclude Include="Scheduler.h" />
     <ClInclude Include="ScreenSession.h" />

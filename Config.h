@@ -10,4 +10,10 @@ struct Config {
     int minIns;            // min instructions per process
     int maxIns;            // max instructions per process
     int delayPerExec;      // CPU cycles to delay between each instruction
+    
+    // NEW for MO2
+    int maxOverallMem;
+    int memPerFrame;
+    int minMemPerProc;
+    int maxMemPerProc;
 };

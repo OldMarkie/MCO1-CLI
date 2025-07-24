@@ -6,9 +6,17 @@
 #include <thread>
 #include <fstream>
 
+#include "MemoryManager.h"
+#include "Config.h"
+
+
+
+
 bool isInitialized = false;
 Config globalConfig;
 Scheduler scheduler;
+
+MemoryManager memoryManager(1, 1);
 
 bool readConfigFile(const std::string& path = "config.txt") {
     std::ifstream file(path);
@@ -20,7 +28,14 @@ bool readConfigFile(const std::string& path = "config.txt") {
         >> globalConfig.batchFreq
         >> globalConfig.minIns
         >> globalConfig.maxIns
-        >> globalConfig.delayPerExec;
+        >> globalConfig.delayPerExec
+        >> globalConfig.maxOverallMem
+        >> globalConfig.memPerFrame
+        >> globalConfig.minMemPerProc
+        >> globalConfig.maxMemPerProc;
+
+    memoryManager = MemoryManager(globalConfig.maxOverallMem, globalConfig.memPerFrame);
+
 
     file.close();
     return true;

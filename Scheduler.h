@@ -24,6 +24,10 @@ public:
     std::unordered_map<std::string, ProcessControlBlock> allProcesses;
     std::mutex schedulerMutex;
     void createNamedProcess(const std::string& name);
+    std::queue<ProcessControlBlock*> readyQueue;
+    int getCpuTick() const;
+    int getActiveTicks() const;
+    int getIdleTicks() const;
 
 
 private:
@@ -32,9 +36,11 @@ private:
     std::atomic<int> cpuTick{ 0 };
 
     std::vector<std::thread> cpuThreads;
+    std::atomic<int> numCPUActiveEstimate{ 0 };
+
     
 
-    std::queue<ProcessControlBlock*> readyQueue;
+    
     
     std::vector<ProcessControlBlock*> finishedProcesses;
 

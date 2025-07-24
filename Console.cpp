@@ -8,11 +8,18 @@
 #include <fstream>
 #include "Scheduler.h"
 #include <unordered_set>
+#include "ProcessControlBlock.h"
+#include "MemoryManager.h"
 
 std::unordered_map<std::string, ScreenSession> sessions;
 extern bool isInitialized;
 extern Scheduler scheduler;
 extern Config globalConfig;
+extern MemoryManager memoryManager;
+
+
+bool parseUserInstruction(const std::string& text, Instruction& out);
+
 
 void Console::drawMainMenu() {
     std::string uChoice;
@@ -47,21 +54,94 @@ void Console::drawMainMenu() {
                 cmdArt::displayNewSesh(screenName);
                 Console::drawScreenSession(screenName);  // enters interactive session
             }
+            else if (screenCmd == "-c") {
+                std::string name;
+                int memSize;
+                std::string instructionString;
+
+                std::cin >> name >> memSize;
+                std::getline(std::cin, instructionString);  // Get rest of the line
+                size_t firstQuote = instructionString.find('"');
+                size_t lastQuote = instructionString.rfind('"');
+
+                if (firstQuote == std::string::npos || lastQuote == std::string::npos || firstQuote == lastQuote) {
+                    std::cout << "Invalid command. Instructions must be enclosed in quotes.\n\n";
+                    return;
+                }
+
+                std::string instructionsRaw = instructionString.substr(firstQuote + 1, lastQuote - firstQuote - 1);
+                std::vector<std::string> tokens;
+
+                std::istringstream iss(instructionsRaw);
+                std::string token;
+                while (std::getline(iss, token, ';')) {
+                    if (!token.empty()) tokens.push_back(token);
+                }
+
+                if (tokens.size() < 1 || tokens.size() > 50) {
+                    std::cout << "Invalid command. Instruction count must be between 1 and 50.\n\n";
+                    return;
+                }
+
+                // Create process and assign instructions
+                ProcessControlBlock pcb;
+                pcb.name = name;
+                auto now = std::chrono::system_clock::now();
+                std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+                std::tm timeinfo;
+#ifdef _WIN32
+                localtime_s(&timeinfo, &now_c);
+#else
+                localtime_r(&now_c, &timeinfo);
+#endif
+                std::ostringstream oss;
+                oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
+                pcb.startTime = oss.str();
+
+                for (const auto& instr : tokens) {
+                    Instruction parsed;
+                    if (parseUserInstruction(instr, parsed)) {
+                        pcb.addInstruction(parsed);
+                    }
+                    else {
+                        std::cout << "Invalid instruction: " << instr << "\n";
+                    }
+                }
+
+                std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
+                auto [it, inserted] = scheduler.allProcesses.emplace(name, std::move(pcb));
+                scheduler.readyQueue.push(&(it->second));
+
+                memoryManager.allocateMemory(name, memSize);
+
+                sessions[name] = createNewScreenSession(name);
+                cmdArt::displayNewSesh(name);
+                Console::drawScreenSession(name);
+            }
+
             else if (screenCmd == "-r") {
                 std::cin >> screenName;
 
                 //std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
                 auto it = scheduler.allProcesses.find(screenName);
-                if (it != scheduler.allProcesses.end() && !it->second.isFinished) {
-                    if (sessions.find(screenName) == sessions.end()) {
-                        auto& pcb = scheduler.allProcesses.at(screenName);
-                        sessions[screenName] = createNewScreenSession(pcb.name);
+                if (it != scheduler.allProcesses.end()) {
+                    if (!it->second.isFinished) {
+                        if (sessions.find(screenName) == sessions.end()) {
+                            auto& pcb = it->second;
+                            sessions[screenName] = createNewScreenSession(pcb.name);
+                        }
+                        Console::drawScreenSession(screenName);
                     }
-                    Console::drawScreenSession(screenName);
+                    else if (!it->second.violationTime.empty()) {
+                        std::cout << "Process " << screenName
+                            << " shut down due to memory access violation error that occurred at "
+                            << it->second.violationTime << ". " << it->second.violationAddr << " invalid.\n\n";
+                    }
+                    else {
+                        std::cout << "Process " << screenName << " not found.\n\n";
+                    }
                 }
-                else {
-                    std::cout << "Process " << screenName << " not found.\n\n";
-                }
+
             }
             else if (screenCmd == "-ls") {
                 auto running = scheduler.getRunningProcesses();
@@ -125,6 +205,14 @@ void Console::drawMainMenu() {
         else if (uChoice == "exit") {
             isRunning = false;
             scheduler.stop();
+        }
+        else if (uChoice == "vmstat") {
+            memoryManager.debugVMStat();
+
+            std::cout << "CPU Ticks (estimates):\n";
+            std::cout << "  Total ticks     : " << scheduler.getCpuTick() << "\n";
+            std::cout << "  Active ticks    : ~" << scheduler.getActiveTicks() << "\n";
+            std::cout << "  Idle ticks      : ~" << scheduler.getIdleTicks() << "\n\n";
         }
         else {
             Console::showUnknownCommand();
@@ -195,4 +283,60 @@ void Console::clear() {
 void Console::showArt() {
     cmdArt::showArt();
 }
+
+bool parseUserInstruction(const std::string& text, Instruction& out) {
+    std::istringstream ss(text);
+    std::string cmd;
+    ss >> cmd;
+
+    if (cmd == "DECLARE") {
+        std::string var; int val;
+        ss >> var >> val;
+        out.type = InstructionType::DECLARE;
+        out.args = { var, static_cast<uint16_t>(val) };
+        return true;
+    }
+    else if (cmd == "ADD" || cmd == "SUBTRACT") {
+        std::string dest, arg1, arg2;
+        ss >> dest >> arg1 >> arg2;
+        InstructionArg a1 = isdigit(arg1[0]) ? InstructionArg((uint16_t)std::stoi(arg1)) : InstructionArg(arg1);
+        InstructionArg a2 = isdigit(arg2[0]) ? InstructionArg((uint16_t)std::stoi(arg2)) : InstructionArg(arg2);
+        out.type = (cmd == "ADD") ? InstructionType::ADD : InstructionType::SUBTRACT;
+        out.args = { dest, a1, a2 };
+        return true;
+    }
+    else if (cmd == "PRINT") {
+        std::string rest;
+        getline(ss, rest);
+        size_t quote1 = rest.find('"');
+        size_t quote2 = rest.rfind('"');
+        std::string msg = (quote1 != std::string::npos && quote2 != std::string::npos)
+            ? rest.substr(quote1 + 1, quote2 - quote1 - 1) : "[Invalid PRINT]";
+        out.type = InstructionType::PRINT;
+        out.args = { msg };
+        return true;
+    }
+    else if (cmd == "SLEEP") {
+        int ticks; ss >> ticks;
+        out.type = InstructionType::SLEEP;
+        out.args = { static_cast<uint16_t>(ticks) };
+        return true;
+    }
+    else if (cmd == "READ") {
+        std::string var, hexAddr; ss >> var >> hexAddr;
+        out.type = InstructionType::READ;
+        out.args = { var, hexAddr };
+        return true;
+    }
+    else if (cmd == "WRITE") {
+        std::string hexAddr, valOrVar; ss >> hexAddr >> valOrVar;
+        InstructionArg val = isdigit(valOrVar[0]) ? InstructionArg((uint16_t)std::stoi(valOrVar)) : InstructionArg(valOrVar);
+        out.type = InstructionType::WRITE;
+        out.args = { hexAddr, val };
+        return true;
+    }
+
+    return false;
+}
+
 

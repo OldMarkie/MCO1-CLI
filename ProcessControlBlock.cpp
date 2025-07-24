@@ -8,6 +8,11 @@
 #include <iomanip> // Add for time formatting
 #include <iostream> 
 
+#include "MemoryManager.h"
+#include "Config.h"
+extern MemoryManager memoryManager;
+extern Config globalConfig;
+
 
 uint16_t resolveValue(const InstructionArg& arg, std::unordered_map<std::string, uint16_t>& variables) {
     if (auto val = std::get_if<uint16_t>(&arg)) return *val;
@@ -172,6 +177,44 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
         int ticks = static_cast<int>(std::get<uint16_t>(ins.args[0]));
         std::this_thread::sleep_for(std::chrono::milliseconds(ticks * 50));
     }
+
+    else if (ins.type == InstructionType::READ) {
+        const std::string& varName = std::get<std::string>(ins.args[0]);
+        const std::string& hexAddr = std::get<std::string>(ins.args[1]);
+
+        try {
+            uint32_t addr = std::stoul(hexAddr, nullptr, 16);
+            uint16_t val = memoryManager.readMemory(name, addr);
+            if (variables.size() < 32) {
+                variables[varName] = val;
+            }
+            logs << "[Core " << coreId << "] READ " << hexAddr << " = " << val << " into " << varName << "\n";
+        }
+        catch (const std::exception& e) {
+            logs << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at " << hexAddr << ": " << e.what() << "\n";
+            isFinished = true;
+            violationTime = currentTimeString();
+            violationAddr = hexAddr;
+        }
+    }
+
+    else if (ins.type == InstructionType::WRITE) {
+        const std::string& hexAddr = std::get<std::string>(ins.args[0]);
+
+        uint16_t value = resolveValue(ins.args[1], variables);
+
+        try {
+            uint32_t addr = std::stoul(hexAddr, nullptr, 16);
+            memoryManager.writeMemory(name, addr, value);
+            logs << "[Core " << coreId << "] WRITE " << value << " to " << hexAddr << "\n";
+        }
+        catch (const std::exception& e) {
+            logs << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at " << hexAddr << ": " << e.what() << "\n";
+            isFinished = true;
+            violationTime = currentTimeString();
+            violationAddr = hexAddr;
+        }
+    }
 }
 
 std::string ProcessControlBlock::getLog() const {
@@ -189,6 +232,21 @@ std::string ProcessControlBlock::getStartTime() const {
 int ProcessControlBlock::totalInstructions() const {
     return static_cast<int>(instructions.size());
 }
+
+std::string ProcessControlBlock::currentTimeString() const {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm timeinfo;
+#ifdef _WIN32
+    localtime_s(&timeinfo, &now_c);
+#else
+    localtime_r(&now_c, &timeinfo);
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&timeinfo, "%I:%M:%S%p");
+    return oss.str();
+}
+
 
 
 

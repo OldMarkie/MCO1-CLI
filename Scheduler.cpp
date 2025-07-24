@@ -8,6 +8,7 @@
 #include <random>
 #include <unordered_set>
 
+
 void Scheduler::initialize(const Config& cfg) {
     config = cfg;
 }
@@ -88,6 +89,8 @@ void Scheduler::cpuLoop(int coreId) {
         }
 
         if (process) {
+            ++numCPUActiveEstimate;  // CPU is now active
+
             int executed = 0;
             int quantum = (config.scheduler == "rr") ? config.quantumCycles : INT_MAX;
 
@@ -102,6 +105,9 @@ void Scheduler::cpuLoop(int coreId) {
             else {
                 readyQueue.push(process);
             }
+
+            --numCPUActiveEstimate;  // CPU done executing
+
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(config.delayPerExec * 50));
@@ -178,6 +184,9 @@ void Scheduler::reportUtilization(bool toFile) {
 
 void Scheduler::createNamedProcess(const std::string& name) {
 
+
+
+
     if (!running) {
         running = true;
         for (int i = 0; i < config.numCPU; ++i) {
@@ -187,6 +196,8 @@ void Scheduler::createNamedProcess(const std::string& name) {
 
     ProcessControlBlock pcb;
     pcb.name = name;
+
+
 
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
@@ -211,4 +222,17 @@ void Scheduler::createNamedProcess(const std::string& name) {
     auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
     readyQueue.push(&(it->second));
 }
+
+int Scheduler::getCpuTick() const {
+    return cpuTick;
+}
+
+int Scheduler::getActiveTicks() const {
+    return cpuTick * numCPUActiveEstimate;
+}
+
+int Scheduler::getIdleTicks() const {
+    return getCpuTick() * config.numCPU - getActiveTicks();
+}
+
 
