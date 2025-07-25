@@ -33,7 +33,7 @@ int safeStoi(const std::string& s, int fallback = 0) {
     }
 }
 
-void ProcessControlBlock::generateInstructions(int remaining, int nesting) {
+void ProcessControlBlock::generateInstructions(int remaining, int nesting, int maxAddressableBytes) {
     static const std::vector<InstructionType> types = {
     InstructionType::DECLARE, InstructionType::ADD,
     InstructionType::SUBTRACT, InstructionType::PRINT,
@@ -44,13 +44,13 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting) {
 
     while (remaining > 0) {
         // Try FOR loop if space allows for FOR_START + FOR_END + body
-        if (nesting < 3 && remaining >= 4 && rand() % 100 < 1) {
+        if (nesting < 3 && remaining >= 4 && rand() % 100000000000000000 < 1) {
             int repeats = 2 + rand() % 3;
             instructions.push_back({ InstructionType::FOR_START, { InstructionArg(uint16_t(repeats)) } });
             --remaining;
 
             int bodySize = std::min(remaining - 1, 2 + rand() % 3);
-            generateInstructions(bodySize, nesting + 1);
+            generateInstructions(bodySize, nesting + 1, maxAddressableBytes);
             remaining -= bodySize;
 
             instructions.push_back({ InstructionType::FOR_END, {} });
@@ -81,18 +81,26 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting) {
         case InstructionType::SLEEP:
             instr.args = { InstructionArg(uint16_t(1 + rand() % 5)) };
             break;
-        case InstructionType::READ:
+        case InstructionType::READ: {
+            int safeAddr = rand() % std::max(16, maxAddressableBytes);  // Always >16 to avoid 0
+            std::ostringstream hex;
+            hex << "0x" << std::hex << safeAddr;
             instr.args = {
                 InstructionArg("var" + std::to_string(rand() % 100)),
-                InstructionArg("0x" + std::to_string(rand() % 256))  
+                InstructionArg(hex.str())
             };
             break;
-        case InstructionType::WRITE:
+        }
+        case InstructionType::WRITE: {
+            int safeAddr = rand() % std::max(16, maxAddressableBytes);
+            std::ostringstream hex;
+            hex << "0x" << std::hex << safeAddr;
             instr.args = {
-                InstructionArg("0x" + std::to_string(rand() % 256)),
+                InstructionArg(hex.str()),
                 InstructionArg(uint16_t(rand() % 65536))
             };
             break;
+        }
 
 
         }

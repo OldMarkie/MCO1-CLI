@@ -34,6 +34,11 @@ public:
 
     ~Scheduler();
   
+    std::queue<ProcessControlBlock*> fcfsRetryQueue;
+
+    std::thread retryThread;
+
+    std::unordered_map<std::string, int> allocatedRetrySizes;
 
  
 

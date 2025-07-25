@@ -57,14 +57,15 @@ void Scheduler::start() {
                 numInstructions += rand() % (config.maxIns - config.minIns + 1);
             }
 
-            pcb.generateInstructions(numInstructions,0);
-
-            std::lock_guard<std::mutex> lock(schedulerMutex);
             int memSize = config.minMemPerProc;
             if (config.minMemPerProc < config.maxMemPerProc) {
                 memSize += rand() % (config.maxMemPerProc - config.minMemPerProc + 1);
             }
 
+            pcb.generateInstructions(numInstructions,0, memSize);
+
+            std::lock_guard<std::mutex> lock(schedulerMutex);
+            
             // Insert into process table first
             auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
             ProcessControlBlock& ref = it->second;
@@ -82,6 +83,10 @@ void Scheduler::stopProcessGeneration() {
     if (processGenThread.joinable()) {
         processGenThread.join();  //  cleanly stop dummy generation
     }
+    if (retryThread.joinable()) {
+        retryThread.join();
+    }
+
 }
 
 
@@ -116,30 +121,39 @@ void Scheduler::cpuLoop(int coreId) {
         }
 
         if (process) {
-            ++numCPUActiveEstimate;  // CPU is now active
+            ++numCPUActiveEstimate;  // Mark this core as active
 
-            int executed = 0;
-            int quantum = (config.scheduler == "rr") ? config.quantumCycles : INT_MAX;
+            if (config.scheduler == "rr") {
+                int executed = 0;
+                int quantum = config.quantumCycles;
 
-            while (!process->isFinished && executed < quantum) {
-                process->executeNextInstruction(coreId);
-                ++executed;
+                while (!process->isFinished && executed < quantum) {
+                    process->executeNextInstruction(coreId);
+                    ++executed;
+                }
+
+                std::lock_guard<std::mutex> lock(schedulerMutex);
+                if (process->isFinished) {
+                    memoryManager->freeMemory(process->name);
+                    finishedProcesses.push_back(process);
+                }
+                else {
+                    readyQueue.push(process);  // Requeue if not done
+                }
             }
-            std::lock_guard<std::mutex> lock(schedulerMutex);
-            if (process->isFinished) {
-                memoryManager->freeMemory(process->name);  //  FREE THE MEMORY
-                //std::cout << "[MM] Memory freed for finished process " << process->name << ".\n";
 
+            else if (config.scheduler == "fcfs") {
+                // FCFS: run to completion, no quantum
+                while (!process->isFinished) {
+                    process->executeNextInstruction(coreId);
+                }
+
+                std::lock_guard<std::mutex> lock(schedulerMutex);
+                memoryManager->freeMemory(process->name);
                 finishedProcesses.push_back(process);
-                //  this will now succeed
             }
 
-            else {
-                readyQueue.push(process);
-            }
-
-            --numCPUActiveEstimate;  // CPU done executing
-
+            --numCPUActiveEstimate;  // Core done
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(config.delayPerExec * 50));
@@ -148,13 +162,18 @@ void Scheduler::cpuLoop(int coreId) {
 }
 
 
+
 ProcessControlBlock Scheduler::createRandomProcess(int id) {
     ProcessControlBlock pcb;
     std::ostringstream name;
     name << "p" << std::setw(3) << std::setfill('0') << id;
     pcb.name = name.str();
     int numInstructions = config.minIns + rand() % (config.maxIns - config.minIns + 1);
-    pcb.generateInstructions(numInstructions,0);
+    int memSize = config.minMemPerProc;
+    if (config.minMemPerProc < config.maxMemPerProc) {
+        memSize += rand() % (config.maxMemPerProc - config.minMemPerProc + 1);
+    }
+    pcb.generateInstructions(numInstructions,0, memSize);
     return pcb;
 }
 
@@ -220,6 +239,29 @@ void Scheduler::createNamedProcess(const std::string& name) {
         for (int i = 0; i < config.numCPU; ++i) {
             cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
         }
+
+        // Launch retry thread for FCFS
+        retryThread = std::thread([this]() {
+            while (running) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                std::lock_guard<std::mutex> lock(schedulerMutex);
+                if (!fcfsRetryQueue.empty()) {
+                    ProcessControlBlock* pcb = fcfsRetryQueue.front();
+                    int memSize = allocatedRetrySizes[pcb->name];
+
+                    int used = memoryManager->getUsedBytes();
+                    if (used + memSize <= config.maxOverallMem) {
+                        fcfsRetryQueue.pop();
+
+                        memoryManager->allocateMemory(pcb->name, memSize);
+                        readyQueue.push(pcb);
+                        std::cout << "[Scheduler] Retried and loaded: " << pcb->name << "\n";
+                    }
+                }
+            }
+            });
+
     }
 
     ProcessControlBlock pcb;
@@ -242,26 +284,35 @@ void Scheduler::createNamedProcess(const std::string& name) {
         numInstructions += rand() % (config.maxIns - config.minIns + 1);
     }
 
-    pcb.generateInstructions(numInstructions, 0);
-
-    //  Determine how much memory this process will request
     int memSize = config.minMemPerProc;
     if (config.minMemPerProc < config.maxMemPerProc) {
         memSize += rand() % (config.maxMemPerProc - config.minMemPerProc + 1);
     }
 
-    //  Ensure thread safety while modifying shared structures
+    pcb.generateInstructions(numInstructions, 0, memSize);
+
     std::lock_guard<std::mutex> lock(schedulerMutex);
 
-    //  Attempt memory allocation before allowing the process to run
-    auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
-    ProcessControlBlock& procRef = it->second;
+    int used = memoryManager->getUsedBytes();
+    if (used + memSize <= config.maxOverallMem) {
+        auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+        ProcessControlBlock& procRef = it->second;
+        memoryManager->allocateMemory(procRef.name, memSize);
+        readyQueue.push(&procRef);
+        std::cout << "[Scheduler] Loaded process " << name << " (" << memSize << "B)\n";
+    }
+    else {
+        std::cout << "[Scheduler] Insufficient memory for " << name << ", added to FCFS retry queue.\n";
+       
+        auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+        ProcessControlBlock& procRef = it->second;
+        fcfsRetryQueue.push(&procRef);
+        allocatedRetrySizes[procRef.name] = memSize;  // keep mem size here
 
-    memoryManager->allocateMemory(procRef.name, memSize);
-    readyQueue.push(&procRef);
-
-
+    }
 }
+
+
 
 
 
@@ -279,7 +330,10 @@ int Scheduler::getIdleTicks() const {
 
 Scheduler::~Scheduler() {
     stop();  // cleanly stop CPU threads if still running
+    stopProcessGeneration();
 }
+
+
 
 
 

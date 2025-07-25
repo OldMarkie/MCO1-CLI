@@ -22,6 +22,17 @@ int MemoryManager::allocateMemory(const std::string& processName, int memSize) {
     pageTables[processName] = std::vector<PageTableEntry>(numPages);
     allocatedBytes[processName] = memSize;
 
+    // At end of allocateMemory()
+    std::ofstream out("csopesy-backing-store.txt", std::ios::app);
+    for (int i = 0; i < numPages; ++i) {
+        out << processName << "." << i << ":";
+        for (int j = 0; j < frameSize / 2; ++j) {
+            out << " 0";
+        }
+        out << "\n";
+    }
+    out.close();
+
     return numPages;  // return success regardless of frame count
 }
 
@@ -194,3 +205,14 @@ void MemoryManager::debugProcessSMI() {
     }
     std::cout << "-------------------\n";
 }
+
+int MemoryManager::getUsedBytes() const {
+    int used = 0;
+    for (const auto& frame : frameTable) {
+        if (!frame.empty()) ++used;
+    }
+    return used * frameSize;
+}
+
+
+

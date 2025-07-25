@@ -30,6 +30,11 @@ public:
     void debugProcessSMI();  // used by `process-smi` command
     std::unordered_map<std::string, int> allocatedBytes;
 
+    int getUsedBytes() const;
+
+    int getAllocatedSize(const std::string& processName) const;
+
+
 private:
     int totalMemory;
     int frameSize;

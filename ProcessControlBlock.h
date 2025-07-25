@@ -49,7 +49,7 @@ public:
     int instructionPointer = 0;
     bool isFinished = false;
 
-    void generateInstructions(int count, int nesting);
+    void generateInstructions(int count, int nesting, int maxAddressableBytes);
     void executeNextInstruction(int coreID);
     std::string getLog() const;
 
