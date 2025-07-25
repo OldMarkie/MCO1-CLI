@@ -11,31 +11,21 @@ MemoryManager::MemoryManager(int totalMemBytes, int frameSz)
     : totalMemory(totalMemBytes), frameSize(frameSz) {
     totalFrames = totalMemory / frameSize;
     frameTable.resize(totalFrames, "");
-    physicalMemory.resize(totalMemory / 2, 0);  // each frame holds uint16_t (2 bytes)
+    physicalMemory.resize(totalFrames * (frameSize / 2), 0);  // totalFrames * words per frame
+    // each frame holds uint16_t (2 bytes)
 }
 
 int MemoryManager::allocateMemory(const std::string& processName, int memSize) {
     int numPages = (memSize + frameSize - 1) / frameSize;
 
-    int freeFrames = std::count_if(frameTable.begin(), frameTable.end(),
-        [](const std::string& s) { return s.empty(); });
-
-    if (freeFrames < numPages) return -1;
-
+    // Initialize page table entries: all invalid at first
     pageTables[processName] = std::vector<PageTableEntry>(numPages);
     allocatedBytes[processName] = memSize;
 
-    // Optional: assign pages to frames immediately
-    for (int i = 0; i < numPages; ++i) {
-        int frameIdx = findFreeFrame();
-        if (frameIdx == -1) break;
-        frameTable[frameIdx] = processName + "." + std::to_string(i);
-        pageTables[processName][i] = { frameIdx, true, false }; // valid now
-        pagedIn++;
-    }
-
-    return numPages;
+    return numPages;  // return success regardless of frame count
 }
+
+
 
 
 

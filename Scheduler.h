@@ -30,13 +30,12 @@ public:
     int getCpuTick() const;
     int getActiveTicks() const;
     int getIdleTicks() const;
-    std::queue<ProcessControlBlock*> waitingQueue;  // NEW: for processes waiting on memory
+   
 
     ~Scheduler();
-    void checkWaitingQueue();
+  
 
-    std::thread waitingQueueThread;
-    std::atomic<bool> checkWaitingQueueRunning = false;
+ 
 
 
 

@@ -10,7 +10,7 @@
 
 #include "MemoryManager.h"
 #include "Config.h"
-extern MemoryManager memoryManager;
+extern MemoryManager* memoryManager;
 extern Config globalConfig;
 
 
@@ -35,9 +35,12 @@ int safeStoi(const std::string& s, int fallback = 0) {
 
 void ProcessControlBlock::generateInstructions(int remaining, int nesting) {
     static const std::vector<InstructionType> types = {
-        InstructionType::DECLARE, InstructionType::ADD,
-        InstructionType::SUBTRACT, InstructionType::PRINT, InstructionType::SLEEP
+    InstructionType::DECLARE, InstructionType::ADD,
+    InstructionType::SUBTRACT, InstructionType::PRINT,
+    InstructionType::SLEEP, InstructionType::READ,
+    InstructionType::WRITE
     };
+
 
     while (remaining > 0) {
         // Try FOR loop if space allows for FOR_START + FOR_END + body
@@ -78,7 +81,22 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting) {
         case InstructionType::SLEEP:
             instr.args = { InstructionArg(uint16_t(1 + rand() % 5)) };
             break;
+        case InstructionType::READ:
+            instr.args = {
+                InstructionArg("var" + std::to_string(rand() % 100)),
+                InstructionArg("0x" + std::to_string(rand() % 256))  
+            };
+            break;
+        case InstructionType::WRITE:
+            instr.args = {
+                InstructionArg("0x" + std::to_string(rand() % 256)),
+                InstructionArg(uint16_t(rand() % 65536))
+            };
+            break;
+
+
         }
+
 
         instructions.push_back(instr);
         --remaining;
@@ -184,7 +202,12 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
 
         try {
             uint32_t addr = std::stoul(hexAddr, nullptr, 16);
-            uint16_t val = memoryManager.readMemory(name, addr);
+            if (memoryManager->readMemory(name, addr); true) {
+                // second check ensures fault is handled if needed
+            }
+
+            // After page fault handler, read again
+            uint16_t val = memoryManager->readMemory(name, addr);
             if (variables.size() < 32) {
                 variables[varName] = val;
             }
@@ -198,14 +221,18 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
         }
     }
 
+
     else if (ins.type == InstructionType::WRITE) {
         const std::string& hexAddr = std::get<std::string>(ins.args[0]);
-
         uint16_t value = resolveValue(ins.args[1], variables);
 
         try {
             uint32_t addr = std::stoul(hexAddr, nullptr, 16);
-            memoryManager.writeMemory(name, addr, value);
+            if (memoryManager->writeMemory(name, addr, value); true) {
+                // attempt triggers page fault handling if needed
+            }
+
+            memoryManager->writeMemory(name, addr, value);  // retry actual write
             logs << "[Core " << coreId << "] WRITE " << value << " to " << hexAddr << "\n";
         }
         catch (const std::exception& e) {
@@ -215,6 +242,7 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
             violationAddr = hexAddr;
         }
     }
+
 }
 
 std::string ProcessControlBlock::getLog() const {

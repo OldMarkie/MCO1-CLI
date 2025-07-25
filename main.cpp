@@ -16,7 +16,8 @@ bool isInitialized = false;
 Config globalConfig;
 Scheduler scheduler;
 
-MemoryManager memoryManager(1, 1);
+MemoryManager* memoryManager;
+
 
 bool readConfigFile(const std::string& path = "config.txt") {
     std::ifstream file(path);
@@ -34,7 +35,8 @@ bool readConfigFile(const std::string& path = "config.txt") {
         >> globalConfig.minMemPerProc
         >> globalConfig.maxMemPerProc;
 
-    memoryManager = MemoryManager(globalConfig.maxOverallMem, globalConfig.memPerFrame);
+    memoryManager = new MemoryManager(globalConfig.maxOverallMem, globalConfig.memPerFrame);
+
 
 
     file.close();
@@ -51,5 +53,7 @@ int main() {
     isInitialized = false;
 
     Console::drawMainMenu();
+    delete memoryManager;
+    memoryManager = nullptr;
     return 0;
 }

@@ -28,6 +28,7 @@ public:
 
     void debugVMStat();  // used by `vmstat` command
     void debugProcessSMI();  // used by `process-smi` command
+    std::unordered_map<std::string, int> allocatedBytes;
 
 private:
     int totalMemory;
@@ -39,7 +40,7 @@ private:
     std::unordered_map<std::string, std::vector<uint16_t>> backingStore;  // optional cache
 
     std::vector<uint16_t> physicalMemory;
-    std::unordered_map<std::string, int> allocatedBytes;
+   
 
     int pagedIn = 0;
     int pagedOut = 0;

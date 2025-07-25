@@ -15,7 +15,7 @@ std::unordered_map<std::string, ScreenSession> sessions;
 extern bool isInitialized;
 extern Scheduler scheduler;
 extern Config globalConfig;
-extern MemoryManager memoryManager;
+extern MemoryManager* memoryManager;
 
 
 bool parseUserInstruction(const std::string& text, Instruction& out);
@@ -119,7 +119,7 @@ void Console::drawMainMenu() {
                 auto [it, inserted] = scheduler.allProcesses.emplace(name, std::move(pcb));
                 scheduler.readyQueue.push(&(it->second));
 
-                memoryManager.allocateMemory(name, memSize);
+                memoryManager->allocateMemory(name, memSize);
 
                 sessions[name] = createNewScreenSession(name);
                 cmdArt::displayNewSesh(name);
@@ -215,7 +215,7 @@ void Console::drawMainMenu() {
             scheduler.stop();
         }
         else if (uChoice == "vmstat") {
-            memoryManager.debugVMStat();
+            memoryManager->debugVMStat();
 
             std::cout << "CPU Ticks (estimates):\n";
             std::cout << "  Total ticks     : " << scheduler.getCpuTick() << "\n";
