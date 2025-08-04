@@ -63,11 +63,12 @@ void Console::drawMainMenu() {
 
             else if (screenCmd == "-c") {
                 std::string name;
-                int memSize;
                 std::string instructionString;
 
-                std::cin >> name >> memSize;
-                std::getline(std::cin, instructionString);  // Get rest of the line
+                std::cin >> name;
+                std::cin.ignore();  // discard leftover newline
+                std::getline(std::cin, instructionString);
+
                 size_t firstQuote = instructionString.find('"');
                 size_t lastQuote = instructionString.rfind('"');
 
@@ -77,54 +78,34 @@ void Console::drawMainMenu() {
                 }
 
                 std::string instructionsRaw = instructionString.substr(firstQuote + 1, lastQuote - firstQuote - 1);
-                std::vector<std::string> tokens;
-
                 std::istringstream iss(instructionsRaw);
                 std::string token;
+                std::vector<Instruction> parsedInstructions;
+
                 while (std::getline(iss, token, ';')) {
-                    if (!token.empty()) tokens.push_back(token);
+                    if (!token.empty()) {
+                        Instruction instr;
+                        if (parseUserInstruction(token, instr)) {
+                            parsedInstructions.push_back(instr);
+                        }
+                        else {
+                            std::cout << "Invalid instruction: " << token << "\n";
+                        }
+                    }
                 }
 
-                if (tokens.size() < 1 || tokens.size() > 50) {
+                if (parsedInstructions.size() < 1 || parsedInstructions.size() > 50) {
                     std::cout << "Invalid command. Instruction count must be between 1 and 50.\n\n";
                     return;
                 }
 
-                // Create process and assign instructions
-                ProcessControlBlock pcb;
-                pcb.name = name;
-                auto now = std::chrono::system_clock::now();
-                std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-                std::tm timeinfo;
-#ifdef _WIN32
-                localtime_s(&timeinfo, &now_c);
-#else
-                localtime_r(&now_c, &timeinfo);
-#endif
-                std::ostringstream oss;
-                oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
-                pcb.startTime = oss.str();
-
-                for (const auto& instr : tokens) {
-                    Instruction parsed;
-                    if (parseUserInstruction(instr, parsed)) {
-                        pcb.addInstruction(parsed);
-                    }
-                    else {
-                        std::cout << "Invalid instruction: " << instr << "\n";
-                    }
-                }
-
-                std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
-                auto [it, inserted] = scheduler.allProcesses.emplace(name, std::move(pcb));
-                scheduler.readyQueue.push(&(it->second));
-
-                memoryManager->allocateMemory(name, memSize);
+                scheduler.createNamedProcessWithInstructions(name, parsedInstructions);
 
                 sessions[name] = createNewScreenSession(name);
                 cmdArt::displayNewSesh(name);
                 Console::drawScreenSession(name);
             }
+
 
             else if (screenCmd == "-r") {
                 std::cin >> screenName;
@@ -232,7 +213,7 @@ void Console::drawScreenSession(const std::string& screenName) {
     while (true) {
         Console::clear();
 
-        std::lock_guard<std::mutex> lock(scheduler.schedulerMutex);
+        std::lock_guard<std::recursive_mutex> lock(scheduler.schedulerMutex);
         auto it = scheduler.allProcesses.find(screenName);
         if (it == scheduler.allProcesses.end()) {
             std::cout << "Process not found.\n";

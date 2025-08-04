@@ -24,12 +24,14 @@ public:
     void reportUtilization(bool toFile = false);
     void stopProcessGeneration();  
     std::unordered_map<std::string, ProcessControlBlock> allProcesses;
-    std::mutex schedulerMutex;
+    std::recursive_mutex schedulerMutex;
     void createNamedProcess(const std::string& name);
     std::queue<ProcessControlBlock*> readyQueue;
     int getCpuTick() const;
     int getActiveTicks() const;
     int getIdleTicks() const;
+    void createNamedProcessWithInstructions(const std::string& name, const std::vector<Instruction>& instructions);
+
    
 
     ~Scheduler();
@@ -39,6 +41,7 @@ public:
     std::thread retryThread;
 
     std::unordered_map<std::string, int> allocatedRetrySizes;
+    bool isRunning() const { return running; }
 
  
 

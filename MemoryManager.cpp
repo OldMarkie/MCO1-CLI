@@ -5,6 +5,8 @@
 #include <sstream>
 #include <cstring>
 #include <algorithm>
+#include <chrono>
+#include <mutex>
 
 
 MemoryManager::MemoryManager(int totalMemBytes, int frameSz)
@@ -83,9 +85,14 @@ uint16_t MemoryManager::readMemory(const std::string& processName, uint32_t addr
 
     auto& table = pageTables[processName];
 
-    if (pageNum >= table.size() || !table[pageNum].valid) {
-        if (!handlePageFault(processName, addr)) throw std::runtime_error("Access violation");
+    while (pageNum >= table.size() || !table[pageNum].valid) {
+        bool success = handlePageFault(processName, addr);
+        if (!success) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;  // keep retrying
+        }
     }
+
 
     int frameNum = table[pageNum].frameNumber;
     int absoluteIdx = (frameNum * frameSize / 2) + offset;

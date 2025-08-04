@@ -64,7 +64,8 @@ void Scheduler::start() {
 
             pcb.generateInstructions(numInstructions,0, memSize);
 
-            std::lock_guard<std::mutex> lock(schedulerMutex);
+            std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
+
             
             // Insert into process table first
             auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
@@ -113,7 +114,8 @@ void Scheduler::cpuLoop(int coreId) {
     while (running) {
         ProcessControlBlock* process = nullptr;
         {
-            std::lock_guard<std::mutex> lock(schedulerMutex);
+            std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
+
             if (!readyQueue.empty()) {
                 process = readyQueue.front();
                 readyQueue.pop();
@@ -132,7 +134,8 @@ void Scheduler::cpuLoop(int coreId) {
                     ++executed;
                 }
 
-                std::lock_guard<std::mutex> lock(schedulerMutex);
+                std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
+
                 if (process->isFinished) {
                     memoryManager->freeMemory(process->name);
                     finishedProcesses.push_back(process);
@@ -148,7 +151,8 @@ void Scheduler::cpuLoop(int coreId) {
                     process->executeNextInstruction(coreId);
                 }
 
-                std::lock_guard<std::mutex> lock(schedulerMutex);
+                std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
+
                 memoryManager->freeMemory(process->name);
                 finishedProcesses.push_back(process);
             }
@@ -236,16 +240,19 @@ void Scheduler::reportUtilization(bool toFile) {
 void Scheduler::createNamedProcess(const std::string& name) {
     if (!running) {
         running = true;
+
         for (int i = 0; i < config.numCPU; ++i) {
             cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
         }
+    }
 
-        // Launch retry thread for FCFS
+    //  Always check if retryThread is started
+    if (!retryThread.joinable()) {
         retryThread = std::thread([this]() {
             while (running) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
 
-                std::lock_guard<std::mutex> lock(schedulerMutex);
                 if (!fcfsRetryQueue.empty()) {
                     ProcessControlBlock* pcb = fcfsRetryQueue.front();
                     int memSize = allocatedRetrySizes[pcb->name];
@@ -253,7 +260,6 @@ void Scheduler::createNamedProcess(const std::string& name) {
                     int used = memoryManager->getUsedBytes();
                     if (used + memSize <= config.maxOverallMem) {
                         fcfsRetryQueue.pop();
-
                         memoryManager->allocateMemory(pcb->name, memSize);
                         readyQueue.push(pcb);
                         std::cout << "[Scheduler] Retried and loaded: " << pcb->name << "\n";
@@ -261,8 +267,9 @@ void Scheduler::createNamedProcess(const std::string& name) {
                 }
             }
             });
-
     }
+
+
 
     ProcessControlBlock pcb;
     pcb.name = name;
@@ -291,7 +298,8 @@ void Scheduler::createNamedProcess(const std::string& name) {
 
     pcb.generateInstructions(numInstructions, 0, memSize);
 
-    std::lock_guard<std::mutex> lock(schedulerMutex);
+    std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
+
 
     int used = memoryManager->getUsedBytes();
     if (used + memSize <= config.maxOverallMem) {
@@ -311,6 +319,79 @@ void Scheduler::createNamedProcess(const std::string& name) {
 
     }
 }
+
+void Scheduler::createNamedProcessWithInstructions(const std::string& name, const std::vector<Instruction>& instructions) {
+    if (!running) {
+        running = true;
+
+        for (int i = 0; i < config.numCPU; ++i) {
+            cpuThreads.emplace_back(&Scheduler::cpuLoop, this, i);
+        }
+    }
+
+    if (!retryThread.joinable()) {
+        retryThread = std::thread([this]() {
+            while (running) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
+
+                if (!fcfsRetryQueue.empty()) {
+                    ProcessControlBlock* pcb = fcfsRetryQueue.front();
+                    int memSize = allocatedRetrySizes[pcb->name];
+                    int used = memoryManager->getUsedBytes();
+                    if (used + memSize <= config.maxOverallMem) {
+                        fcfsRetryQueue.pop();
+                        memoryManager->allocateMemory(pcb->name, memSize);
+                        readyQueue.push(pcb);
+                        std::cout << "[Scheduler] Retried and loaded: " << pcb->name << "\n";
+                    }
+                }
+            }
+            });
+    }
+
+    ProcessControlBlock pcb;
+    pcb.name = name;
+
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm timeinfo;
+#ifdef _WIN32
+    localtime_s(&timeinfo, &now_c);
+#else
+    localtime_r(&now_c, &timeinfo);
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
+    pcb.startTime = oss.str();
+
+    for (const auto& instr : instructions) {
+        pcb.addInstruction(instr);
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
+    auto [it, inserted] = allProcesses.emplace(pcb.name, std::move(pcb));
+    ProcessControlBlock& procRef = it->second;
+
+    int memSize = config.minMemPerProc;
+    if (config.minMemPerProc < config.maxMemPerProc) {
+        memSize += rand() % (config.maxMemPerProc - config.minMemPerProc + 1);
+    }
+
+    int used = memoryManager->getUsedBytes();
+    if (used + memSize <= config.maxOverallMem) {
+        memoryManager->allocateMemory(procRef.name, memSize);
+        readyQueue.push(&procRef);
+        std::cout << "[Scheduler] Loaded named process " << name << " (" << memSize << "B)\n";
+    }
+    else {
+        fcfsRetryQueue.push(&procRef);
+        allocatedRetrySizes[procRef.name] = memSize;
+        std::cout << "[Scheduler] Insufficient memory for " << name << ", added to FCFS retry queue.\n";
+    }
+}
+
+
 
 
 
