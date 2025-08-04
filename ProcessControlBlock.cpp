@@ -209,13 +209,27 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
         std::ostringstream timeStream;
         timeStream << std::put_time(&timeinfo, "%I:%M:%S%p");
 
-        if (auto msg = std::get_if<std::string>(&ins.args[0])) {
-            logs << "[" << timeStream.str() << "] [Core " << coreId << "] " << *msg << "\n";
+        std::ostringstream message;
+
+        for (const auto& arg : ins.args) {
+            if (std::holds_alternative<std::string>(arg)) {
+                const std::string& str = std::get<std::string>(arg);
+                // Check if it's a variable
+                if (variables.count(str)) {
+                    message << variables[str];
+                }
+                else {
+                    message << str;
+                }
+            }
+            else if (std::holds_alternative<uint16_t>(arg)) {
+                message << std::get<uint16_t>(arg);
+            }
         }
-        else {
-            logs << "[" << timeStream.str() << "] [Core " << coreId << "] [INVALID PRINT ARGUMENT]\n";
-        }
+
+        logs << "[" << timeStream.str() << "] [Core " << coreId << "] " << message.str() << "\n";
     }
+
     else if (ins.type == InstructionType::SLEEP) {
         int ticks = static_cast<int>(std::get<uint16_t>(ins.args[0]));
         std::this_thread::sleep_for(std::chrono::milliseconds(ticks * 50));

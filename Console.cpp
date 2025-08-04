@@ -195,6 +195,9 @@ void Console::drawMainMenu() {
             isRunning = false;
             scheduler.stop();
         }
+        else if (uChoice == "process-smi") {
+            memoryManager->debugProcessSMI();
+        }
         else if (uChoice == "vmstat") {
             memoryManager->debugVMStat();
 
