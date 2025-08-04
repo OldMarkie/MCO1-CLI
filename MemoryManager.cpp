@@ -7,6 +7,9 @@
 #include <algorithm>
 #include <chrono>
 #include <mutex>
+#include "ProcessControlBlock.h"
+#include "PageFaultException.h"
+
 
 
 MemoryManager::MemoryManager(int totalMemBytes, int frameSz)
@@ -213,6 +216,11 @@ void MemoryManager::debugProcessSMI() {
     std::cout << "-------------------\n";
 }
 
+uint32_t MemoryManager::getSymbolTableAddress(const std::string& processName) {
+    return 0; // or wherever your symbol table starts, often 0x000
+}
+
+
 int MemoryManager::getUsedBytes() const {
     int used = 0;
     for (const auto& frame : frameTable) {
@@ -220,6 +228,106 @@ int MemoryManager::getUsedBytes() const {
     }
     return used * frameSize;
 }
+
+bool MemoryManager::isPageLoaded(const std::string& processName, uint32_t address) {
+    int pageNumber = address / frameSize;
+    auto& pageTable = pageTables[processName];
+
+    if (pageNumber >= pageTable.size()) return false;
+
+    return pageTable[pageNumber].valid;
+}
+
+
+void MemoryManager::ensurePagesPresent(
+    const std::string& processName,
+    const Instruction& instr,
+    const std::unordered_map<std::string, uint16_t>& symbolTable)
+{
+    uint32_t symAddr = getSymbolTableAddress(processName);
+
+    switch (instr.type) {
+    case InstructionType::DECLARE:
+    case InstructionType::ADD:
+    case InstructionType::SUBTRACT:
+    case InstructionType::PRINT:
+        // Requires symbol table page to be loaded
+        if (!isPageLoaded(processName, symAddr)) {
+            throw PageFaultException(processName, symAddr);
+        }
+        break;
+
+    case InstructionType::READ: {
+        uint32_t addr = 0;
+
+        if (std::holds_alternative<uint32_t>(instr.args[1])) {
+            addr = std::get<uint32_t>(instr.args[1]);
+        }
+        else if (std::holds_alternative<std::string>(instr.args[1])) {
+            const std::string& hex = std::get<std::string>(instr.args[1]);
+            try {
+                addr = std::stoul(hex, nullptr, 16);  // could crash
+            }
+            catch (...) {
+                throw std::runtime_error("Invalid hex address string in READ: " + hex);
+            }
+        }
+        else {
+            throw std::runtime_error("Invalid address type in READ");
+        }
+
+        if (!isPageLoaded(processName, addr)) {
+            throw PageFaultException(processName, addr);
+        }
+
+        // Also check symbol table page
+        uint32_t symAddr = getSymbolTableAddress(processName);
+        if (!isPageLoaded(processName, symAddr)) {
+            throw PageFaultException(processName, symAddr);
+        }
+        break;
+    }
+
+
+    case InstructionType::WRITE: {
+        uint32_t addr = 0;
+        if (std::holds_alternative<uint32_t>(instr.args[0])) {
+            addr = std::get<uint32_t>(instr.args[0]);
+        }
+        else if (std::holds_alternative<std::string>(instr.args[0])) {
+            const std::string& hex = std::get<std::string>(instr.args[0]);
+            try {
+                addr = std::stoul(hex, nullptr, 16);
+            }
+            catch (...) {
+                throw std::runtime_error("Invalid hex address string in WRITE: " + hex);
+            }
+        }
+        else {
+            throw std::runtime_error("Invalid address type in WRITE");
+        }
+
+        if (!isPageLoaded(processName, addr)) {
+            throw PageFaultException(processName, addr);
+        }
+
+        // Also check symbol table
+        uint32_t symAddr = getSymbolTableAddress(processName);
+        if (!isPageLoaded(processName, symAddr)) {
+            throw PageFaultException(processName, symAddr);
+        }
+
+        break;
+    }
+
+    }
+}
+
+
+
+
+
+
 
 
 

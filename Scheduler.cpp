@@ -8,6 +8,8 @@
 #include <random>
 #include <unordered_set>
 #include "MemoryManager.h"
+#include "PageFaultException.h"
+#include "MemoryAccessViolation.h"
 
 extern MemoryManager* memoryManager;
 
@@ -130,9 +132,27 @@ void Scheduler::cpuLoop(int coreId) {
                 int quantum = config.quantumCycles;
 
                 while (!process->isFinished && executed < quantum) {
-                    process->executeNextInstruction(coreId);
+                    bool instructionComplete = false;
+
+                    while (!instructionComplete) {
+                        try {
+                            instructionComplete = process->executeNextInstruction(coreId);  // Return true if successfully executed
+                        }
+                        catch (const PageFaultException& pf) {
+                            memoryManager->handlePageFault(process->name, pf.address);  // This should evict & load as needed
+                            std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Simulate delay
+                        }
+                        catch (const MemoryAccessViolation& mv) {
+                            std::cerr << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at 0x"
+                                << std::hex << mv.address << ": Access violation\n";
+                            process->isFinished = true;
+                            break;
+                        }
+                    }
+
                     ++executed;
                 }
+
 
                 std::lock_guard<std::recursive_mutex> lock(schedulerMutex);
 

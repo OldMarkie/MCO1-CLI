@@ -10,6 +10,8 @@
 
 #include "MemoryManager.h"
 #include "Config.h"
+#include "PageFaultException.h"
+#include "MemoryAccessViolation.h"
 extern MemoryManager* memoryManager;
 extern Config globalConfig;
 
@@ -82,22 +84,18 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting, int m
             instr.args = { InstructionArg(uint16_t(1 + rand() % 5)) };
             break;
         case InstructionType::READ: {
-            int safeAddr = rand() % std::max(16, maxAddressableBytes);  // Always >16 to avoid 0
-            std::ostringstream hex;
-            hex << "0x" << std::hex << safeAddr;
+            uint32_t safeAddr = rand() % std::max(16, maxAddressableBytes);  // Always >16 to avoid 0
             instr.args = {
-                InstructionArg("var" + std::to_string(rand() % 100)),
-                InstructionArg(hex.str())
+            InstructionArg("var" + std::to_string(rand() % 100)),
+            InstructionArg(static_cast<uint32_t>(safeAddr))  // safer and preferred
             };
             break;
         }
         case InstructionType::WRITE: {
-            int safeAddr = rand() % std::max(16, maxAddressableBytes);
-            std::ostringstream hex;
-            hex << "0x" << std::hex << safeAddr;
+            uint32_t safeAddr = rand() % std::max(16, maxAddressableBytes);
             instr.args = {
-                InstructionArg(hex.str()),
-                InstructionArg(uint16_t(rand() % 65536))
+            InstructionArg(static_cast<uint32_t>(safeAddr)),
+            InstructionArg(static_cast<uint16_t>(rand() % 65536))
             };
             break;
         }
@@ -114,44 +112,68 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting, int m
 
 
 
-void ProcessControlBlock::executeNextInstruction(int coreId) {
+bool ProcessControlBlock::executeNextInstruction(int coreId) {
     if (instructionPointer >= instructions.size()) {
         isFinished = true;
         logs << "\n[Finished] Process " << name << " completed.\n";
-        return;
+        return true;
     }
 
     Instruction& current = instructions[instructionPointer];
 
+    // FOR loop start
     if (current.type == InstructionType::FOR_START) {
         int repeats = std::get<uint16_t>(current.args[0]);
         forStack.push({ instructionPointer, repeats });
         ++instructionPointer;
-        return;
+        return true;
     }
 
+    // FOR loop end
     if (current.type == InstructionType::FOR_END) {
         if (!forStack.empty()) {
             ForContext& top = forStack.top();
             top.remaining--;
             if (top.remaining > 0) {
-                instructionPointer = top.startIndex + 1;  // go back inside the loop
+                instructionPointer = top.startIndex + 1;  // jump back
             }
             else {
-                forStack.pop(); // done looping
+                forStack.pop();  // exit loop
                 ++instructionPointer;
             }
         }
         else {
-            ++instructionPointer; // malformed loop, just move on
+            ++instructionPointer;  // malformed loop fallback
         }
-        return;
+        return true;
     }
 
-    lastExecutedCore = coreId;
-    execute(current, coreId);
-    ++instructionPointer;
+    try {
+        memoryManager->ensurePagesPresent(name, current, variables);
+
+        lastExecutedCore = coreId;
+        execute(current, coreId);
+        ++instructionPointer;
+
+        if (instructionPointer >= instructions.size()) {
+            isFinished = true;
+            logs << "\n[Finished] Process " << name << " completed.\n";
+        }
+
+        return true;  // success
+    }
+    catch (const PageFaultException& pf) {
+        memoryManager->handlePageFault(pf.processName, pf.address);
+        return false;  // retry later
+    }
+    catch (const MemoryAccessViolation& mv) {
+        logs << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at " << mv.address << ": Access violation\n";
+        isFinished = true;
+        return true;  // mark as complete
+    }
 }
+
+
 
 
 
@@ -179,79 +201,94 @@ void ProcessControlBlock::execute(const Instruction& ins, int coreId) {
         auto now = std::chrono::system_clock::now();
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
         std::tm timeinfo;
-    #ifdef _WIN32
-            localtime_s(&timeinfo, &now_c);
-    #else
-            localtime_r(&now_c, &timeinfo);
-    #endif
-            std::ostringstream timeStream;
-            timeStream << std::put_time(&timeinfo, "%I:%M:%S%p");
+#ifdef _WIN32
+        localtime_s(&timeinfo, &now_c);
+#else
+        localtime_r(&now_c, &timeinfo);
+#endif
+        std::ostringstream timeStream;
+        timeStream << std::put_time(&timeinfo, "%I:%M:%S%p");
 
-            if (auto msg = std::get_if<std::string>(&ins.args[0])) {
-                logs << "[" << timeStream.str() << "] "
-                    << "[Core " << coreId << "] "
-                    << *msg << "\n";
-            }
-            else {
-                logs << "[" << timeStream.str() << "] "
-                    << "[Core " << coreId << "] "
-                    << "[INVALID PRINT ARGUMENT]\n";
-            }
+        if (auto msg = std::get_if<std::string>(&ins.args[0])) {
+            logs << "[" << timeStream.str() << "] [Core " << coreId << "] " << *msg << "\n";
+        }
+        else {
+            logs << "[" << timeStream.str() << "] [Core " << coreId << "] [INVALID PRINT ARGUMENT]\n";
+        }
     }
-
     else if (ins.type == InstructionType::SLEEP) {
         int ticks = static_cast<int>(std::get<uint16_t>(ins.args[0]));
         std::this_thread::sleep_for(std::chrono::milliseconds(ticks * 50));
     }
-
     else if (ins.type == InstructionType::READ) {
         const std::string& varName = std::get<std::string>(ins.args[0]);
-        const std::string& hexAddr = std::get<std::string>(ins.args[1]);
+        uint32_t addr = 0;
 
         try {
-            uint32_t addr = std::stoul(hexAddr, nullptr, 16);
-            if (memoryManager->readMemory(name, addr); true) {
-                // second check ensures fault is handled if needed
+            if (std::holds_alternative<uint32_t>(ins.args[1])) {
+                addr = std::get<uint32_t>(ins.args[1]);
+            }
+            else if (std::holds_alternative<std::string>(ins.args[1])) {
+                addr = std::stoul(std::get<std::string>(ins.args[1]), nullptr, 16);
+            }
+            else {
+                throw std::runtime_error("Invalid address type in READ");
             }
 
-            // After page fault handler, read again
+            // trigger fault if needed
+            memoryManager->readMemory(name, addr);
             uint16_t val = memoryManager->readMemory(name, addr);
+
             if (variables.size() < 32) {
                 variables[varName] = val;
             }
-            logs << "[Core " << coreId << "] READ " << hexAddr << " = " << val << " into " << varName << "\n";
+
+            logs << "[Core " << coreId << "] READ 0x" << std::hex << addr << std::dec
+                << " = " << val << " into " << varName << "\n";
         }
         catch (const std::exception& e) {
-            logs << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at " << hexAddr << ": " << e.what() << "\n";
+            logs << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at 0x"
+                << std::hex << addr << std::dec << ": " << e.what() << "\n";
             isFinished = true;
             violationTime = currentTimeString();
-            violationAddr = hexAddr;
+            std::ostringstream oss;
+            oss << "0x" << std::hex << addr;
+            violationAddr = oss.str();
         }
     }
-
-
     else if (ins.type == InstructionType::WRITE) {
-        const std::string& hexAddr = std::get<std::string>(ins.args[0]);
         uint16_t value = resolveValue(ins.args[1], variables);
+        uint32_t addr = 0;
 
         try {
-            uint32_t addr = std::stoul(hexAddr, nullptr, 16);
-            if (memoryManager->writeMemory(name, addr, value); true) {
-                // attempt triggers page fault handling if needed
+            if (std::holds_alternative<uint32_t>(ins.args[0])) {
+                addr = std::get<uint32_t>(ins.args[0]);
+            }
+            else if (std::holds_alternative<std::string>(ins.args[0])) {
+                addr = std::stoul(std::get<std::string>(ins.args[0]), nullptr, 16);
+            }
+            else {
+                throw std::runtime_error("Invalid address type in WRITE");
             }
 
-            memoryManager->writeMemory(name, addr, value);  // retry actual write
-            logs << "[Core " << coreId << "] WRITE " << value << " to " << hexAddr << "\n";
+            memoryManager->writeMemory(name, addr, value); // triggers fault if needed
+            memoryManager->writeMemory(name, addr, value); // retry actual write
+
+            logs << "[Core " << coreId << "] WRITE " << value << " to 0x"
+                << std::hex << addr << std::dec << "\n";
         }
         catch (const std::exception& e) {
-            logs << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at " << hexAddr << ": " << e.what() << "\n";
+            logs << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at 0x"
+                << std::hex << addr << std::dec << ": " << e.what() << "\n";
             isFinished = true;
             violationTime = currentTimeString();
-            violationAddr = hexAddr;
+            std::ostringstream oss;
+            oss << "0x" << std::hex << addr;
+            violationAddr = oss.str();
         }
     }
-
 }
+
 
 std::string ProcessControlBlock::getLog() const {
     return logs.str();

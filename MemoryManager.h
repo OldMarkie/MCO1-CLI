@@ -5,6 +5,7 @@
 #include <string>
 #include <cstdint>
 #include <fstream>
+#include "ProcessControlBlock.h"
 
 struct PageTableEntry {
     int frameNumber = -1;     // -1 means not in memory
@@ -33,6 +34,15 @@ public:
     int getUsedBytes() const;
 
     int getAllocatedSize(const std::string& processName) const;
+  
+    bool isPageLoaded(const std::string& processName, uint32_t address);
+    void ensurePagesPresent(
+        const std::string& processName,
+        const Instruction& instr,
+        const std::unordered_map<std::string, uint16_t>& symbolTable);
+    uint32_t getSymbolTableAddress(const std::string& processName);
+
+
 
 
 private:

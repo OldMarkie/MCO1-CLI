@@ -138,7 +138,9 @@
     <ClInclude Include="cmdArt.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="Console.h" />
+    <ClInclude Include="MemoryAccessViolation.h" />
     <ClInclude Include="MemoryManager.h" />
+    <ClInclude Include="PageFaultException.h" />
     <ClInclude Include="ProcessControlBlock.h" />
     <ClInclude Include="Scheduler.h" />
     <ClInclude Include="ScreenSession.h" />

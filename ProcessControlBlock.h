@@ -22,7 +22,7 @@ enum class InstructionType {
     WRITE       // NEW
 };
 
-using InstructionArg = std::variant<std::string, uint16_t, uint8_t>;
+using InstructionArg = std::variant<std::string, uint16_t, uint8_t, uint32_t>;
 
 struct ForContext {
     int startIndex;
@@ -50,7 +50,7 @@ public:
     bool isFinished = false;
 
     void generateInstructions(int count, int nesting, int maxAddressableBytes);
-    void executeNextInstruction(int coreID);
+    bool executeNextInstruction(int coreID);
     std::string getLog() const;
 
     void addInstruction(const Instruction& instr);
