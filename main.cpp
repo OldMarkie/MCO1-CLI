@@ -64,5 +64,11 @@ int main() {
     Console::drawMainMenu();
     delete memoryManager;
     memoryManager = nullptr;
+
+    std::ofstream clearFile("csopesy-backing-store.txt", std::ios::trunc);
+    if (!clearFile) {
+        std::cerr << "Warning: Could not clear backing store.\n";
+    }
+
     return 0;
 }
