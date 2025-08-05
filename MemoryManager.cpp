@@ -11,6 +11,13 @@
 #include "PageFaultException.h"
 #include "AccessViolationException.h"
 
+uint32_t MemoryManager::getMaxAddressable(const std::string& processName) const {
+    auto it = processMaxAddressable.find(processName);
+    if (it != processMaxAddressable.end()) {
+        return it->second;
+    }
+    return 0;
+}
 
 
 MemoryManager::MemoryManager(int totalMemBytes, int frameSz)
@@ -27,6 +34,8 @@ int MemoryManager::allocateMemory(const std::string& processName, int memSize) {
     // Initialize page table entries: all invalid at first
     pageTables[processName] = std::vector<PageTableEntry>(numPages);
     allocatedBytes[processName] = memSize;
+
+    processMaxAddressable[processName] = numPages * frameSize;
 
     // At end of allocateMemory()
     std::ofstream out("csopesy-backing-store.txt", std::ios::app);

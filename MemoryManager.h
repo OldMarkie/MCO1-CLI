@@ -41,7 +41,10 @@ public:
         const Instruction& instr,
         const std::unordered_map<std::string, uint16_t>& symbolTable);
     uint32_t getSymbolTableAddress(const std::string& processName);
+    // MemoryManager.h
+    std::unordered_map<std::string, uint32_t> processMaxAddressable;
 
+    uint32_t getMaxAddressable(const std::string& processName) const;
 
 
 

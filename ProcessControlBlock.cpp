@@ -87,7 +87,9 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting, int m
             instr.args = { InstructionArg(uint16_t(1 + rand() % 5)) };
             break;
         case InstructionType::READ: {
-            uint32_t safeAddr = rand() % std::max(16, maxAddressableBytes);  // Always >16 to avoid 0
+            uint32_t maxAddr = memoryManager->getMaxAddressable(name);  // ensure safe access
+            uint32_t safeAddr = rand() % std::max(2u, maxAddr);
+            safeAddr &= ~1; 
             instr.args = {
             InstructionArg("var" + std::to_string(rand() % 100)),
             InstructionArg(static_cast<uint32_t>(safeAddr))  // safer and preferred
@@ -95,7 +97,9 @@ void ProcessControlBlock::generateInstructions(int remaining, int nesting, int m
             break;
         }
         case InstructionType::WRITE: {
-            uint32_t safeAddr = rand() % std::max(16, maxAddressableBytes);
+            uint32_t maxAddr = memoryManager->getMaxAddressable(name);
+            uint32_t safeAddr = rand() % std::max(2u, maxAddr);
+            safeAddr &= ~1;
             instr.args = {
             InstructionArg(static_cast<uint32_t>(safeAddr)),
             InstructionArg(static_cast<uint16_t>(rand() % 65536))
