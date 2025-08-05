@@ -1,1 +1,32 @@
-32 fcfs 0 5 100 100 0 4096 64 512 512
+# Number of CPUs available [1, 128]
+32
+
+# Scheduler algorithm: "fcfs" or "rr"
+fcfs
+
+# Quantum cycles for RR scheduling (ignored for FCFS) [1, 2^32]
+0
+
+# Batch process frequency (every N cycles) [1, 2^32]
+5
+
+# Minimum instructions per process [1, 2^32]
+100
+
+# Maximum instructions per process [1, 2^32]
+100
+
+# Delay per instruction execution [0, 2^32]
+0
+
+# Maximum total memory in bytes [2^6, 2^16]
+4096
+
+# Memory size per frame (and per page) in bytes [2^6, 2^16]
+64
+
+# Minimum memory per process in bytes [2^6, 2^16]
+512
+
+# Maximum memory per process in bytes [2^6, 2^16]
+512
