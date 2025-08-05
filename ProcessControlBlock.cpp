@@ -12,8 +12,11 @@
 #include "Config.h"
 #include "PageFaultException.h"
 #include "MemoryAccessViolation.h"
+#include "AccessViolationException.h"
 extern MemoryManager* memoryManager;
 extern Config globalConfig;
+
+std::string getCurrentTimestamp();
 
 
 uint16_t resolveValue(const InstructionArg& arg, std::unordered_map<std::string, uint16_t>& variables) {
@@ -171,6 +174,26 @@ bool ProcessControlBlock::executeNextInstruction(int coreId) {
         isFinished = true;
         return true;  // mark as complete
     }
+    catch (const AccessViolationException& ave) {
+        isFinished = true;
+        violationAddr = ave.addressHex();
+        violationTime = getCurrentTimestamp(); // make sure this function exists
+        std::cerr << "[Core " << coreId << "] MEMORY ACCESS VIOLATION at " << violationAddr << ": bad variant access\n";
+    }
+}
+
+std::string getCurrentTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm timeinfo;
+#ifdef _WIN32
+    localtime_s(&timeinfo, &now_c);
+#else
+    localtime_r(&now_c, &timeinfo);
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&timeinfo, "%m/%d/%Y %I:%M:%S%p");
+    return oss.str();
 }
 
 

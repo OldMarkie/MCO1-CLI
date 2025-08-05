@@ -9,6 +9,7 @@
 #include <mutex>
 #include "ProcessControlBlock.h"
 #include "PageFaultException.h"
+#include "AccessViolationException.h"
 
 
 
@@ -83,6 +84,12 @@ bool MemoryManager::handlePageFault(const std::string& processName, uint32_t add
 }
 
 uint16_t MemoryManager::readMemory(const std::string& processName, uint32_t addr) {
+    
+    // Check if address is within the allocated virtual memory range
+    if (allocatedBytes.find(processName) == allocatedBytes.end() || addr >= allocatedBytes[processName]) {
+        throw AccessViolationException(processName, addr);  // <-- Use your custom exception
+    }
+
     int pageNum = addr / frameSize;
     int offset = (addr % frameSize) / 2; // because each element is 2 bytes (uint16_t)
 
@@ -106,6 +113,13 @@ uint16_t MemoryManager::readMemory(const std::string& processName, uint32_t addr
 }
 
 void MemoryManager::writeMemory(const std::string& processName, uint32_t addr, uint16_t value) {
+    
+    // Check if address is within the allocated virtual memory range
+    if (allocatedBytes.find(processName) == allocatedBytes.end() || addr >= allocatedBytes[processName]) {
+        throw AccessViolationException(processName, addr);
+    }
+
+    
     int pageNum = addr / frameSize;
     int offset = (addr % frameSize) / 2;
 

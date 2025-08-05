@@ -135,6 +135,7 @@
     <ClCompile Include="Scheduler.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AccessViolationException.h" />
     <ClInclude Include="cmdArt.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="Console.h" />
