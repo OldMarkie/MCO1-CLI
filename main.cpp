@@ -58,6 +58,11 @@ int main() {
         return 1;
     }
 
+    std::ofstream clearFile("csopesy-backing-store.txt", std::ios::trunc);
+    if (!clearFile) {
+        std::cerr << "Warning: Could not clear backing store.\n";
+    }
+
     scheduler.initialize(globalConfig);
     isInitialized = false;
 

@@ -191,13 +191,16 @@ int MemoryManager::findFreeFrame() {
 }
 
 int MemoryManager::evictPageLRU() {
-    // Simplified: evict the first one we find (can use better LRU later)
     for (int i = 0; i < frameTable.size(); ++i) {
         if (!frameTable[i].empty()) {
             auto token = frameTable[i];
             size_t dot = token.find('.');
             std::string proc = token.substr(0, dot);
             int page = std::stoi(token.substr(dot + 1));
+
+            // SAFETY CHECK
+            if (pageTables.find(proc) == pageTables.end()) continue;
+            if (page < 0 || page >= pageTables[proc].size()) continue;
 
             if (pageTables[proc][page].dirty) {
                 writeBackToStore(proc, page);
@@ -210,8 +213,9 @@ int MemoryManager::evictPageLRU() {
             return i;
         }
     }
-    return 0;  // fallback
+    return 0;  // fallback (may cause issues, consider throwing exception or logging)
 }
+
 
 void MemoryManager::debugVMStat() {
     int used = 0;
